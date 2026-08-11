@@ -4,7 +4,7 @@ VMAX is an **Embedded System Topology & Correlation Explorer** for understanding
 
 The project starts with Device Tree exploration and is designed to grow toward correlation across devices, drivers, MMIO, IRQs, DMA/IOMMU/IOVA, kernel symbols, snapshots, and SoC-specific plugins.
 
-> Status: early development. V0.1 currently provides DTB parsing, a FastAPI backend, a TypeScript API client, and a React Device Tree browser.
+> Status: early development. V0.1 currently provides DTB parsing, a FastAPI backend, a TypeScript API client, and a React Device Tree browser with node property inspection.
 
 ## Why VMAX
 
@@ -50,6 +50,9 @@ TypeScript API client
   |
   v
 React DeviceTreeView
+  |
+  v
+PropertyPanel
 ```
 
 Implemented pieces include:
@@ -63,7 +66,7 @@ Implemented pieces include:
 - FastAPI endpoints for metadata and the parsed Device Tree
 - Pydantic response schemas and OpenAPI contract
 - TypeScript API models and API client
-- React/Vite Device Tree browser with recursive expand/collapse
+- React/Vite Device Tree browser with recursive expand/collapse and a node PropertyPanel
 - backend, API-client, and frontend component tests
 - validation with a Raspberry Pi 5 DTB
 
@@ -310,7 +313,7 @@ pylibfdt
 DTB
 ```
 
-The browser should display the root `/` node, its immediate children, a total node count, and expandable/collapsible Device Tree nodes.
+The browser should display the root `/` node, its immediate children, a total node count, expandable/collapsible Device Tree nodes, and a property panel for the selected node.
 
 ## Tests
 

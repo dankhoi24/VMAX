@@ -31,7 +31,7 @@ button {
   display: flex;
   justify-content: space-between;
   margin: 0 auto 16px;
-  max-width: 1120px;
+  max-width: 1280px;
 }
 
 .app-header h1 {
@@ -60,7 +60,8 @@ button {
 }
 
 .status-panel,
-.tree-surface {
+.tree-surface,
+.property-panel {
   background: #ffffff;
   border: 1px solid #d8dee6;
   border-radius: 8px;
@@ -71,6 +72,21 @@ button {
 .status-panel {
   color: #4c5b6c;
   padding: 20px;
+}
+
+.workspace-grid {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  margin: 0 auto;
+  max-width: 1280px;
+}
+
+.workspace-grid .tree-surface,
+.workspace-grid .property-panel {
+  margin: 0;
+  max-width: none;
 }
 
 .status-panel h2 {
@@ -135,6 +151,11 @@ button {
   background: #eef5fb;
 }
 
+.tree-row-selected,
+.tree-row-selected:hover {
+  background: #dfeaf5;
+}
+
 .tree-toggle {
   align-items: center;
   background: transparent;
@@ -151,6 +172,22 @@ button {
 
 .tree-toggle-placeholder {
   cursor: default;
+}
+
+.tree-node-button {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  min-width: 0;
+  padding: 0 2px;
+  text-align: left;
+}
+
+.tree-node-button:focus-visible,
+.tree-toggle:focus-visible,
+.reload-button:focus-visible {
+  outline: 2px solid #2c6ea3;
+  outline-offset: 2px;
 }
 
 .tree-node-name {
@@ -170,6 +207,124 @@ button {
   text-align: center;
 }
 
+.property-panel {
+  max-height: calc(100vh - 140px);
+  overflow: auto;
+}
+
+.property-panel-header {
+  align-items: center;
+  border-bottom: 1px solid #e2e7ee;
+  display: flex;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 10px 14px;
+}
+
+.property-panel-header h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.property-panel-header span {
+  color: #627083;
+  font-size: 13px;
+}
+
+.property-panel-empty,
+.property-empty {
+  color: #627083;
+  margin: 0;
+  padding: 16px;
+}
+
+.node-metadata,
+.property-fields {
+  margin: 0;
+}
+
+.metadata-row,
+.property-fields div {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 112px minmax(0, 1fr);
+}
+
+.metadata-row {
+  border-bottom: 1px solid #edf1f5;
+  padding: 10px 14px;
+}
+
+.metadata-row dt,
+.property-fields dt {
+  color: #627083;
+  font-size: 12px;
+}
+
+.metadata-row dd,
+.property-fields dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.metadata-row code,
+.property-fields code {
+  color: #16283a;
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.properties-section h3 {
+  border-bottom: 1px solid #edf1f5;
+  font-size: 14px;
+  margin: 0;
+  padding: 12px 14px;
+}
+
+.property-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.property-item {
+  border-bottom: 1px solid #edf1f5;
+  padding: 12px 14px;
+}
+
+.property-item-header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.property-name {
+  color: #17202a;
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.property-kind {
+  background: #e8f0eb;
+  border: 1px solid #cbdcd1;
+  border-radius: 999px;
+  color: #31533c;
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 1px 7px;
+}
+
+.property-fields {
+  display: grid;
+  gap: 6px;
+}
+
 @media (max-width: 640px) {
   .app-shell {
     padding: 12px;
@@ -182,5 +337,18 @@ button {
 
   .tree-scroll {
     max-height: calc(100vh - 124px);
+  }
+
+  .workspace-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .property-panel {
+    max-height: none;
+  }
+
+  .metadata-row,
+  .property-fields div {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

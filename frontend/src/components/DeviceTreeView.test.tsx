@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DeviceTreeView } from "./DeviceTreeView";
 import type { DeviceTreeNode } from "../models/devicetree";
@@ -51,7 +51,14 @@ const tree: DeviceTreeNode = {
 
 describe("DeviceTreeView", () => {
   it("renders root and immediate children by default", () => {
-    render(<DeviceTreeView root={tree} nodeCount={4} />);
+    render(
+      <DeviceTreeView
+        root={tree}
+        nodeCount={4}
+        selectedPath={tree.path}
+        onSelectNode={() => undefined}
+      />,
+    );
 
     expect(screen.getByText("/")).toBeTruthy();
     expect(screen.getByText("soc")).toBeTruthy();
@@ -60,13 +67,27 @@ describe("DeviceTreeView", () => {
   });
 
   it("does not render descendants of collapsed child nodes by default", () => {
-    render(<DeviceTreeView root={tree} nodeCount={4} />);
+    render(
+      <DeviceTreeView
+        root={tree}
+        nodeCount={4}
+        selectedPath={tree.path}
+        onSelectNode={() => undefined}
+      />,
+    );
 
     expect(screen.queryByText("uart@1000")).toBeNull();
   });
 
   it("expands and collapses child node descendants", () => {
-    render(<DeviceTreeView root={tree} nodeCount={4} />);
+    render(
+      <DeviceTreeView
+        root={tree}
+        nodeCount={4}
+        selectedPath={tree.path}
+        onSelectNode={() => undefined}
+      />,
+    );
 
     const socToggle = screen.getByRole("button", { name: "Toggle soc" });
 
@@ -75,5 +96,25 @@ describe("DeviceTreeView", () => {
 
     fireEvent.click(socToggle);
     expect(screen.queryByText("uart@1000")).toBeNull();
+  });
+
+  it("selects nodes through the node label", () => {
+    const onSelectNode = vi.fn();
+
+    render(
+      <DeviceTreeView
+        root={tree}
+        nodeCount={4}
+        selectedPath="/soc"
+        onSelectNode={onSelectNode}
+      />,
+    );
+
+    const socTreeItem = screen.getByText("soc").closest('[role="treeitem"]');
+    expect(socTreeItem?.getAttribute("aria-selected")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "chosen" }));
+
+    expect(onSelectNode).toHaveBeenCalledWith(tree.children[1]);
   });
 });

@@ -3,7 +3,7 @@ name = "vmax"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.115,<1.0",
+    "fastapi[standard]>=0.115,<1.0",
 ]
 
 [project.optional-dependencies]
@@ -11,6 +11,9 @@ dev = [
     "httpx2>=0.28",
 ]
 dtb = [
+    "pylibfdt>=1.7.2",
+]
+all = [
     "pylibfdt>=1.7.2",
 ]
 

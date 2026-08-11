@@ -154,6 +154,24 @@ class FastApiDeviceTreeTest(unittest.TestCase):
             ["No current DTB source configured"],
         )
 
+    def test_openapi_exposes_typed_devicetree_contract(self) -> None:
+        client = TestClient(create_app(devicetree_state=DeviceTreeState()))
+
+        response = client.get("/openapi.json")
+
+        self.assertEqual(response.status_code, 200)
+        schemas = response.json()["components"]["schemas"]
+        self.assertIn("MetadataResponse", schemas)
+        self.assertIn("DeviceTreeResponse", schemas)
+        self.assertIn("DeviceTreeNodeResponse", schemas)
+        self.assertIn("DeviceTreePropertyResponse", schemas)
+        self.assertEqual(
+            response.json()["paths"]["/api/v1/metadata"]["get"]["responses"]["200"][
+                "content"
+            ]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/MetadataResponse",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

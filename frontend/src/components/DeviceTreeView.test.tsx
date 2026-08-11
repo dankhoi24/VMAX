@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -51,14 +52,7 @@ const tree: DeviceTreeNode = {
 
 describe("DeviceTreeView", () => {
   it("renders root and immediate children by default", () => {
-    render(
-      <DeviceTreeView
-        root={tree}
-        nodeCount={4}
-        selectedPath={tree.path}
-        onSelectNode={() => undefined}
-      />,
-    );
+    renderDeviceTreeView();
 
     expect(screen.getByText("/")).toBeTruthy();
     expect(screen.getByText("soc")).toBeTruthy();
@@ -67,27 +61,13 @@ describe("DeviceTreeView", () => {
   });
 
   it("does not render descendants of collapsed child nodes by default", () => {
-    render(
-      <DeviceTreeView
-        root={tree}
-        nodeCount={4}
-        selectedPath={tree.path}
-        onSelectNode={() => undefined}
-      />,
-    );
+    renderDeviceTreeView();
 
     expect(screen.queryByText("uart@1000")).toBeNull();
   });
 
   it("expands and collapses child node descendants", () => {
-    render(
-      <DeviceTreeView
-        root={tree}
-        nodeCount={4}
-        selectedPath={tree.path}
-        onSelectNode={() => undefined}
-      />,
-    );
+    renderDeviceTreeView();
 
     const socToggle = screen.getByRole("button", { name: "Toggle soc" });
 
@@ -101,14 +81,7 @@ describe("DeviceTreeView", () => {
   it("selects nodes through the node label", () => {
     const onSelectNode = vi.fn();
 
-    render(
-      <DeviceTreeView
-        root={tree}
-        nodeCount={4}
-        selectedPath="/soc"
-        onSelectNode={onSelectNode}
-      />,
-    );
+    renderDeviceTreeView("/soc", onSelectNode);
 
     const socTreeItem = screen.getByText("soc").closest('[role="treeitem"]');
     expect(socTreeItem?.getAttribute("aria-selected")).toBe("true");
@@ -118,3 +91,39 @@ describe("DeviceTreeView", () => {
     expect(onSelectNode).toHaveBeenCalledWith(tree.children[1]);
   });
 });
+
+function renderDeviceTreeView(
+  selectedPath: string | null = tree.path,
+  onSelectNode: (node: DeviceTreeNode) => void = () => undefined,
+) {
+  function DeviceTreeViewHarness() {
+    const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
+      () => new Set([tree.path]),
+    );
+
+    const toggleNode = (path: string) => {
+      setExpandedPaths((current) => {
+        const next = new Set(current);
+        if (next.has(path)) {
+          next.delete(path);
+        } else {
+          next.add(path);
+        }
+        return next;
+      });
+    };
+
+    return (
+      <DeviceTreeView
+        root={tree}
+        nodeCount={4}
+        expandedPaths={expandedPaths}
+        selectedPath={selectedPath}
+        onToggleNode={toggleNode}
+        onSelectNode={onSelectNode}
+      />
+    );
+  }
+
+  render(<DeviceTreeViewHarness />);
+}

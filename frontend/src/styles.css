@@ -61,7 +61,8 @@ button {
 
 .status-panel,
 .tree-surface,
-.property-panel {
+.property-panel,
+.search-panel {
   background: #ffffff;
   border: 1px solid #d8dee6;
   border-radius: 8px;
@@ -84,9 +85,16 @@ button {
 }
 
 .workspace-grid .tree-surface,
-.workspace-grid .property-panel {
+.workspace-grid .property-panel,
+.workspace-grid .search-panel {
   margin: 0;
   max-width: none;
+}
+
+.tree-column {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
 }
 
 .status-panel h2 {
@@ -128,7 +136,7 @@ button {
 }
 
 .tree-scroll {
-  max-height: calc(100vh - 140px);
+  max-height: calc(100vh - 250px);
   overflow: auto;
   padding: 8px 0;
 }
@@ -205,6 +213,110 @@ button {
   min-width: 22px;
   padding: 1px 7px;
   text-align: center;
+}
+
+.search-panel {
+  padding: 12px;
+}
+
+.search-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.search-header h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.search-header span {
+  color: #627083;
+  font-size: 13px;
+}
+
+.search-input {
+  background: #ffffff;
+  border: 1px solid #cfd8e3;
+  border-radius: 6px;
+  color: #17202a;
+  font: inherit;
+  min-height: 36px;
+  padding: 6px 10px;
+  width: 100%;
+}
+
+.search-input:focus {
+  border-color: #2c6ea3;
+  outline: 2px solid #d7e8f6;
+}
+
+.search-empty {
+  color: #627083;
+  font-size: 13px;
+  margin: 10px 0 0;
+}
+
+.search-results {
+  list-style: none;
+  margin: 10px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 0;
+}
+
+.search-result-button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.search-result-button:hover {
+  background: #eef5fb;
+}
+
+.search-result-button:focus-visible {
+  outline: 2px solid #2c6ea3;
+  outline-offset: 2px;
+}
+
+.search-result-name,
+.search-result-path {
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.search-result-name {
+  color: #16283a;
+  font-size: 13px;
+}
+
+.search-result-path {
+  color: #627083;
+  font-size: 12px;
+}
+
+.search-match-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.search-match {
+  background: #e8f0eb;
+  border: 1px solid #cbdcd1;
+  border-radius: 999px;
+  color: #31533c;
+  font-size: 11px;
+  padding: 1px 7px;
 }
 
 .property-panel {
@@ -336,7 +448,7 @@ button {
   }
 
   .tree-scroll {
-    max-height: calc(100vh - 124px);
+    max-height: none;
   }
 
   .workspace-grid {

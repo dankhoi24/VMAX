@@ -1,40 +1,22 @@
-import { useEffect, useState } from "react";
-
 import type { DeviceTreeNode } from "../models/devicetree";
 
 interface DeviceTreeViewProps {
   root: DeviceTreeNode;
   nodeCount: number;
+  expandedPaths: Set<string>;
   selectedPath: string | null;
+  onToggleNode: (path: string) => void;
   onSelectNode: (node: DeviceTreeNode) => void;
 }
 
 export function DeviceTreeView({
   root,
   nodeCount,
+  expandedPaths,
   selectedPath,
+  onToggleNode,
   onSelectNode,
 }: DeviceTreeViewProps) {
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
-    () => new Set([root.path]),
-  );
-
-  useEffect(() => {
-    setExpandedPaths(new Set([root.path]));
-  }, [root]);
-
-  const toggleNode = (path: string) => {
-    setExpandedPaths((current) => {
-      const next = new Set(current);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
-      }
-      return next;
-    });
-  };
-
   return (
     <section className="tree-surface" aria-label="Device Tree">
       <div className="tree-toolbar">
@@ -48,7 +30,7 @@ export function DeviceTreeView({
             depth={0}
             expandedPaths={expandedPaths}
             selectedPath={selectedPath}
-            onToggle={toggleNode}
+            onToggle={onToggleNode}
             onSelectNode={onSelectNode}
           />
         </ul>

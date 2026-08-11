@@ -15,6 +15,12 @@ class PropertyDecoderTest(unittest.TestCase):
         self.assertTrue(prop.value)
         self.assertEqual(prop.raw_bytes, b"")
 
+    def test_empty_known_cell_property_is_cells_not_boolean(self) -> None:
+        prop = self.decoder.decode("ranges", b"")
+
+        self.assertEqual(prop.kind, PropertyKind.CELLS)
+        self.assertEqual(prop.value, ())
+
     def test_decodes_compatible_as_string_list(self) -> None:
         prop = self.decoder.decode("compatible", b"vendor,device\x00vendor,fallback\x00")
 
@@ -49,6 +55,13 @@ class PropertyDecoderTest(unittest.TestCase):
         self.assertEqual(prop.value, (0x00000000, 0x12340000, 0x00001000))
         self.assertEqual(prop.raw_bytes, raw)
 
+    def test_known_cell_property_is_not_misclassified_as_string(self) -> None:
+        raw = bytes.fromhex("41424300")
+        prop = self.decoder.decode("phandle", raw)
+
+        self.assertEqual(prop.kind, PropertyKind.CELLS)
+        self.assertEqual(prop.value, (0x41424300,))
+
     def test_known_cell_property_with_bad_length_is_unknown(self) -> None:
         prop = self.decoder.decode("reg", b"\x01\x02\x03")
 
@@ -56,17 +69,19 @@ class PropertyDecoderTest(unittest.TestCase):
         self.assertIsNone(prop.value)
         self.assertEqual(prop.raw_bytes, b"\x01\x02\x03")
 
-    def test_decodes_non_cell_binary_as_bytes(self) -> None:
+    def test_non_cell_binary_is_unknown(self) -> None:
         prop = self.decoder.decode("vendor,data", b"\x01\x02\x03")
 
-        self.assertEqual(prop.kind, PropertyKind.BYTES)
-        self.assertEqual(prop.value, (1, 2, 3))
+        self.assertEqual(prop.kind, PropertyKind.UNKNOWN)
+        self.assertIsNone(prop.value)
+        self.assertEqual(prop.raw_bytes, b"\x01\x02\x03")
 
-    def test_invalid_utf8_with_trailing_nul_is_bytes(self) -> None:
+    def test_invalid_utf8_with_trailing_nul_is_unknown(self) -> None:
         prop = self.decoder.decode("vendor,data", b"\xff\x00")
 
-        self.assertEqual(prop.kind, PropertyKind.BYTES)
-        self.assertEqual(prop.value, (0xFF, 0x00))
+        self.assertEqual(prop.kind, PropertyKind.UNKNOWN)
+        self.assertIsNone(prop.value)
+        self.assertEqual(prop.raw_bytes, b"\xff\x00")
 
     def test_arbitrary_four_byte_binary_is_unknown_not_cells(self) -> None:
         raw = b"\x01\x02\x03\x04"

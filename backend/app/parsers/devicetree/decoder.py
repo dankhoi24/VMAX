@@ -28,6 +28,9 @@ class PropertyDecoder:
     )
 
     def decode(self, name: str, raw_bytes: bytes) -> DeviceTreeProperty:
+        if name in self.CELL_PROPERTIES:
+            return self._decode_cells(name, raw_bytes)
+
         if not raw_bytes:
             return DeviceTreeProperty(
                 name=name,
@@ -40,22 +43,11 @@ class PropertyDecoder:
         if strings is not None:
             return self._decode_strings(name, raw_bytes, strings)
 
-        if name in self.CELL_PROPERTIES:
-            return self._decode_cells(name, raw_bytes)
-
-        if len(raw_bytes) % 4 == 0:
-            return DeviceTreeProperty(
-                name=name,
-                raw_bytes=raw_bytes,
-                kind=PropertyKind.UNKNOWN,
-                value=None,
-            )
-
         return DeviceTreeProperty(
             name=name,
             raw_bytes=raw_bytes,
-            kind=PropertyKind.BYTES,
-            value=tuple(raw_bytes),
+            kind=PropertyKind.UNKNOWN,
+            value=None,
         )
 
     def decode_many(

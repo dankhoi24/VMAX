@@ -110,6 +110,41 @@ describe("SearchBox", () => {
     expect(screen.getByText("/soc/uart@1000")).toBeTruthy();
   });
 
+  it("closes results when clicking outside of search", () => {
+    render(
+      <>
+        <button type="button">Outside</button>
+        <SearchBox root={tree} onSelectResult={() => undefined} />
+      </>,
+    );
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search Device Tree" }), {
+      target: { value: "uart" },
+    });
+
+    expect(screen.getByText("/soc/uart@1000")).toBeTruthy();
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Outside" }));
+
+    expect(screen.queryByText("/soc/uart@1000")).toBeNull();
+  });
+
+  it("shows a persistent clear button for active searches", () => {
+    render(<SearchBox root={tree} onSelectResult={() => undefined} />);
+
+    const input = screen.getByRole("searchbox", { name: "Search Device Tree" });
+    fireEvent.change(input, {
+      target: { value: "uart" },
+    });
+
+    expect(screen.getByRole("button", { name: "Clear search" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+
+    expect((input as HTMLInputElement).value).toBe("");
+    expect(screen.queryByText("1 match")).toBeNull();
+  });
+
   it("renders no matches for unmatched queries", () => {
     render(<SearchBox root={tree} onSelectResult={() => undefined} />);
 

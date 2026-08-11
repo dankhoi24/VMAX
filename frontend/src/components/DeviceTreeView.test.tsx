@@ -90,6 +90,37 @@ describe("DeviceTreeView", () => {
 
     expect(onSelectNode).toHaveBeenCalledWith(tree.children[1]);
   });
+
+  it("scrolls the selected node into view", () => {
+    const prototype = HTMLElement.prototype as Partial<
+      Pick<HTMLElement, "scrollIntoView">
+    >;
+    const originalScrollIntoView = prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+
+    Object.defineProperty(prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    try {
+      renderDeviceTreeView("/soc");
+
+      expect(scrollIntoView).toHaveBeenCalledWith({
+        block: "nearest",
+        inline: "nearest",
+      });
+    } finally {
+      if (originalScrollIntoView) {
+        Object.defineProperty(prototype, "scrollIntoView", {
+          configurable: true,
+          value: originalScrollIntoView,
+        });
+      } else {
+        delete prototype.scrollIntoView;
+      }
+    }
+  });
 });
 
 function renderDeviceTreeView(
@@ -119,6 +150,7 @@ function renderDeviceTreeView(
         nodeCount={4}
         expandedPaths={expandedPaths}
         selectedPath={selectedPath}
+        selectionRequest={1}
         onToggleNode={toggleNode}
         onSelectNode={onSelectNode}
       />

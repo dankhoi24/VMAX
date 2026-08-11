@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import type { DeviceTreeNode } from "../models/devicetree";
 import { NodeIcon, TreeIcon } from "./icons";
 
@@ -6,6 +8,7 @@ interface DeviceTreeViewProps {
   nodeCount: number;
   expandedPaths: Set<string>;
   selectedPath: string | null;
+  selectionRequest: number;
   onToggleNode: (path: string) => void;
   onSelectNode: (node: DeviceTreeNode) => void;
 }
@@ -15,6 +18,7 @@ export function DeviceTreeView({
   nodeCount,
   expandedPaths,
   selectedPath,
+  selectionRequest,
   onToggleNode,
   onSelectNode,
 }: DeviceTreeViewProps) {
@@ -34,6 +38,7 @@ export function DeviceTreeView({
             depth={0}
             expandedPaths={expandedPaths}
             selectedPath={selectedPath}
+            selectionRequest={selectionRequest}
             onToggle={onToggleNode}
             onSelectNode={onSelectNode}
           />
@@ -48,6 +53,7 @@ interface DeviceTreeNodeViewProps {
   depth: number;
   expandedPaths: Set<string>;
   selectedPath: string | null;
+  selectionRequest: number;
   onToggle: (path: string) => void;
   onSelectNode: (node: DeviceTreeNode) => void;
 }
@@ -57,13 +63,24 @@ function DeviceTreeNodeView({
   depth,
   expandedPaths,
   selectedPath,
+  selectionRequest,
   onToggle,
   onSelectNode,
 }: DeviceTreeNodeViewProps) {
   const hasChildren = node.children.length > 0;
   const isExpanded = expandedPaths.has(node.path);
   const isSelected = selectedPath === node.path;
+  const rowRef = useRef<HTMLDivElement | null>(null);
   const guides = Array.from({ length: depth }, (_, index) => index);
+
+  useEffect(() => {
+    if (isSelected) {
+      rowRef.current?.scrollIntoView?.({
+        block: "nearest",
+        inline: "nearest",
+      });
+    }
+  }, [isSelected, selectionRequest]);
 
   return (
     <li
@@ -74,6 +91,7 @@ function DeviceTreeNodeView({
     >
       <div
         className={isSelected ? "tree-row tree-row-selected" : "tree-row"}
+        ref={rowRef}
         style={{ paddingLeft: 12 + depth * 20 }}
       >
         {guides.map((index) => (
@@ -118,6 +136,7 @@ function DeviceTreeNodeView({
               depth={depth + 1}
               expandedPaths={expandedPaths}
               selectedPath={selectedPath}
+              selectionRequest={selectionRequest}
               onToggle={onToggle}
               onSelectNode={onSelectNode}
             />

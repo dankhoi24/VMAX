@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { DeviceTreeNode } from "../models/devicetree";
 import {
   searchDeviceTree,
   type DeviceTreeSearchResult,
 } from "../search/devicetreeSearch";
-import { SearchIcon } from "./icons";
+import { SearchIcon, XIcon } from "./icons";
 
 interface SearchBoxProps {
   root: DeviceTreeNode;
@@ -15,9 +15,27 @@ interface SearchBoxProps {
 export function SearchBox({ root, onSelectResult }: SearchBoxProps) {
   const [query, setQuery] = useState("");
   const [resultsOpen, setResultsOpen] = useState(false);
+  const searchRef = useRef<HTMLElement | null>(null);
   const results = useMemo(() => searchDeviceTree(root, query), [root, query]);
   const hasQuery = query.trim().length > 0;
   const showResults = hasQuery && resultsOpen;
+
+  useEffect(() => {
+    if (!resultsOpen) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (searchRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setResultsOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [resultsOpen]);
 
   const handleQueryChange = (value: string) => {
     setQuery(value);
@@ -29,8 +47,17 @@ export function SearchBox({ root, onSelectResult }: SearchBoxProps) {
     setResultsOpen(false);
   };
 
+  const handleClear = () => {
+    setQuery("");
+    setResultsOpen(false);
+  };
+
   return (
-    <section className="search-panel" aria-label="Device Tree search">
+    <section
+      className="search-panel"
+      ref={searchRef}
+      aria-label="Device Tree search"
+    >
       <div className="search-input-shell">
         <SearchIcon className="search-input-icon" />
         <input
@@ -42,6 +69,17 @@ export function SearchBox({ root, onSelectResult }: SearchBoxProps) {
           aria-label="Search Device Tree"
           placeholder="Search nodes, paths, properties..."
         />
+        {hasQuery && (
+          <button
+            className="search-clear-button"
+            type="button"
+            onClick={handleClear}
+            title="Clear search"
+            aria-label="Clear search"
+          >
+            <XIcon className="search-clear-icon" />
+          </button>
+        )}
         {hasQuery && (
           <span className="search-count">
             {results.length.toLocaleString()}{" "}

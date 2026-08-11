@@ -17,9 +17,11 @@ export function App() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [selectedNode, setSelectedNode] = useState<DeviceTreeNode | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [selectionRequest, setSelectionRequest] = useState(0);
 
   const selectNode = useCallback((node: DeviceTreeNode) => {
     setSelectedNode(node);
+    setSelectionRequest((current) => current + 1);
     setExpandedPaths((current) => {
       const next = new Set(current);
       getAncestorPaths(node.path).forEach((path) => next.add(path));
@@ -43,15 +45,18 @@ export function App() {
     setState({ status: "loading" });
     setSelectedNode(null);
     setExpandedPaths(new Set());
+    setSelectionRequest(0);
     try {
       const tree = await getDeviceTree();
       setState({ status: "success", tree });
       setSelectedNode(tree.root);
       setExpandedPaths(new Set([tree.root.path]));
+      setSelectionRequest(1);
     } catch (error) {
       setState(toErrorState(error));
       setSelectedNode(null);
       setExpandedPaths(new Set());
+      setSelectionRequest(0);
     }
   }, []);
 
@@ -103,6 +108,7 @@ export function App() {
             nodeCount={state.tree.node_count}
             expandedPaths={expandedPaths}
             selectedPath={selectedNode?.path ?? null}
+            selectionRequest={selectionRequest}
             onToggleNode={toggleNode}
             onSelectNode={selectNode}
           />

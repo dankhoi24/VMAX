@@ -70,3 +70,12 @@ export function TreeIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function XIcon({ className }: IconProps) {
+  return (
+    <svg className={className} aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
+  );
+}

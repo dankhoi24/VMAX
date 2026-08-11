@@ -51,5 +51,6 @@ Install frontend dependencies and typecheck when Node.js is available:
 ```powershell
 cd frontend
 npm install
+npm test
 npm run typecheck
 ```

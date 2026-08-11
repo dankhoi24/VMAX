@@ -50,15 +50,21 @@ async function requestJson<T>(
 
   const body = await readJson(response);
   if (!response.ok) {
-    const errorBody = isErrorResponse(body) ? body : null;
+    const errorBody = isErrorResponse(body.value) ? body.value : null;
     throw new ApiError(
-      errorBody?.detail.errors.join("; ") || response.statusText,
+      errorBody?.detail.errors.join("; ") ||
+        response.statusText ||
+        `HTTP ${response.status}`,
       response.status,
       errorBody?.detail ?? null,
     );
   }
 
-  return body as T;
+  if (!body.ok) {
+    throw new ApiError("Invalid JSON response", response.status);
+  }
+
+  return body.value as T;
 }
 
 function buildUrl(baseUrl: string | undefined, path: string): string {
@@ -69,13 +75,21 @@ function buildUrl(baseUrl: string | undefined, path: string): string {
   return `${baseUrl.replace(/\/$/, "")}${path}`;
 }
 
-async function readJson(response: Response): Promise<unknown> {
+type JsonReadResult =
+  | { ok: true; value: unknown }
+  | { ok: false; value: null };
+
+async function readJson(response: Response): Promise<JsonReadResult> {
   const text = await response.text();
   if (!text) {
-    return null;
+    return { ok: true, value: null };
   }
 
-  return JSON.parse(text);
+  try {
+    return { ok: true, value: JSON.parse(text) as unknown };
+  } catch {
+    return { ok: false, value: null };
+  }
 }
 
 function isErrorResponse(value: unknown): value is ErrorResponse {

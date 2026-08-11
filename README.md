@@ -4,7 +4,7 @@ VMAX is an **Embedded System Topology & Correlation Explorer** for understanding
 
 The project starts with Device Tree exploration and is designed to grow toward correlation across devices, drivers, MMIO, IRQs, DMA/IOMMU/IOVA, kernel symbols, snapshots, and SoC-specific plugins.
 
-> Status: early development. The current V0.1 work focuses on a reliable, generic Device Tree core.
+> Status: early development. V0.1 currently provides DTB parsing, a FastAPI backend, a TypeScript API client, and a React Device Tree browser.
 
 ## Why VMAX
 
@@ -22,7 +22,7 @@ VMAX aims to correlate those views into one consistent model instead of treating
 
 ## Current V0.1 scope
 
-The current implementation focuses only on Device Tree parsing and modeling:
+The current implementation focuses on loading a DTB and exposing it through a browser-based Device Tree explorer:
 
 ```text
 .dtb
@@ -37,17 +37,35 @@ LibFdtDeviceTreeParser
   |
   v
 DeviceTree domain model
+  |
+  v
+DeviceTreeCollector / DeviceTreeState
+  |
+  v
+FastAPI + Pydantic API schema
+  |
+  | JSON
+  v
+TypeScript API client
+  |
+  v
+React DeviceTreeView
 ```
 
-Implemented core pieces:
+Implemented pieces include:
 
 - `DeviceTree`, `DeviceTreeNode`, `DeviceTreeProperty`, and `ParseResult` domain models
 - conservative property decoding for boolean, string, string-list, cell, and unknown values
 - direct DTB parsing through `pylibfdt`
 - recursive node/property traversal
 - preservation of raw property bytes
-- unit tests with a fake libfdt adapter
-- integration test using a real DTB fixture and real `pylibfdt`
+- Device Tree collector and current-source state
+- FastAPI endpoints for metadata and the parsed Device Tree
+- Pydantic response schemas and OpenAPI contract
+- TypeScript API models and API client
+- React/Vite Device Tree browser with recursive expand/collapse
+- backend, API-client, and frontend component tests
+- validation with a Raspberry Pi 5 DTB
 
 V0.1 intentionally does **not** yet include `/proc`, `/sys`, runtime driver correlation, MMIO interpretation, IRQ runtime data, DMA/IOMMU analysis, WebSocket events, or SoC-specific behavior.
 
@@ -113,20 +131,204 @@ QNX support is planned after the Linux-oriented V1.0 core is stable.
 ```text
 backend/
 ├── app/
+│   ├── api/
+│   ├── collectors/
 │   ├── model/
-│   │   └── devicetree.py
-│   └── parsers/
-│       └── devicetree/
-│           ├── decoder.py
-│           └── libfdt_parser.py
+│   ├── parsers/
+│   └── services/
 └── tests/
-    ├── fixtures/
-    ├── test_devicetree_model.py
-    ├── test_property_decoder.py
-    └── test_libfdt_parser.py
+
+frontend/
+├── src/
+│   ├── api/
+│   ├── components/
+│   ├── models/
+│   ├── App.tsx
+│   └── main.tsx
+├── package.json
+└── vite.config.ts
 ```
 
-The frontend and API layers will be added as V0.1 progresses.
+## Run VMAX
+
+A convenient Windows development setup is:
+
+```text
+Windows
+└── React / Vite frontend
+    └── http://localhost:5173
+            |
+            | /api proxy
+            v
+WSL / Ubuntu
+└── FastAPI backend
+    └── http://localhost:8000
+            |
+            v
+        pylibfdt
+            |
+            v
+           DTB
+```
+
+The source repository can remain on the Windows filesystem. For example:
+
+```text
+Windows: C:\Users\<USER>\Documents\VMAX
+WSL:     /mnt/c/Users/<USER>/Documents/VMAX
+```
+
+### 1. Frontend prerequisites on Windows
+
+Install a Node.js LTS release, then verify:
+
+```powershell
+node --version
+npm --version
+```
+
+Install the frontend dependencies from PowerShell:
+
+```powershell
+cd C:\Users\<USER>\Documents\VMAX\frontend
+npm install
+```
+
+Optional validation:
+
+```powershell
+npm test
+npm run typecheck
+```
+
+### 2. Backend prerequisites in WSL / Ubuntu
+
+Open WSL and install the native tools required to build `pylibfdt`:
+
+```bash
+sudo apt update
+sudo apt install -y curl build-essential swig python3-dev
+```
+
+Install `uv` with the official standalone installer if it is not already available:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.bashrc
+uv --version
+```
+
+Because the repository is shared with Windows, keep the Linux Python environment outside the repository so it does not conflict with a Windows `.venv`:
+
+```bash
+mkdir -p ~/.venvs
+export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/vmax-wsl"
+```
+
+Change to the same repository through the WSL mount and install the backend dependencies, including the DTB parser extra:
+
+```bash
+cd /mnt/c/Users/<USER>/Documents/VMAX
+uv sync --extra dev --extra dtb
+```
+
+Verify the `libfdt` Python module:
+
+```bash
+uv run python -c "import libfdt; print(libfdt.__file__)"
+```
+
+### 3. Start the backend in WSL
+
+Select the DTB that VMAX should load:
+
+```bash
+export PYTHONPATH=backend
+export VMAX_DTB_PATH=/mnt/c/Users/<USER>/Downloads/bcm2712-rpi-5-b.dtb
+```
+
+Start FastAPI/Uvicorn:
+
+```bash
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+The backend should now be available at:
+
+```text
+http://localhost:8000
+```
+
+Useful endpoints:
+
+```text
+GET http://localhost:8000/api/v1/metadata
+GET http://localhost:8000/api/v1/devicetree
+```
+
+### 4. Start the frontend on Windows
+
+In a second terminal:
+
+```powershell
+cd C:\Users\<USER>\Documents\VMAX\frontend
+npm run dev
+```
+
+Vite normally starts the frontend at:
+
+```text
+http://localhost:5173
+```
+
+Open that URL in a browser. The Vite development server proxies `/api` requests to the FastAPI backend on port `8000`, so no backend URL needs to be hard-coded in the frontend.
+
+### 5. Expected result
+
+With both processes running, the request flow is:
+
+```text
+Browser
+  |
+  v
+React / Vite :5173
+  |
+  | /api/v1/devicetree
+  v
+Vite proxy
+  |
+  v
+FastAPI :8000 (WSL)
+  |
+  v
+DeviceTreeCollector
+  |
+  v
+pylibfdt
+  |
+  v
+DTB
+```
+
+The browser should display the root `/` node, its immediate children, a total node count, and expandable/collapsible Device Tree nodes.
+
+## Tests
+
+Run backend tests from the repository root in the Python environment:
+
+```bash
+export PYTHONPATH=backend
+uv run --extra dev python -m unittest discover -s backend/tests -v
+```
+
+Run frontend tests and type checking from `frontend/`:
+
+```bash
+npm test
+npm run typecheck
+```
+
+The real-DTB backend path requires the `libfdt` Python binding (`pylibfdt`).
 
 ## Design principles
 
@@ -136,17 +338,6 @@ The frontend and API layers will be added as V0.1 progresses.
 - **Keep libfdt behind an adapter boundary**: pylibfdt objects do not leak into the domain model.
 - **Separate syntax from semantics**: V0.1 decodes representation; later versions interpret `reg`, `ranges`, IRQs, and other hardware meaning.
 - **Keep the core generic**: Raspberry Pi and R-Car should use the same parser/model contracts.
-
-## Development
-
-Backend tests are written with Python `unittest`.
-
-```bash
-cd backend
-python -m unittest discover -s tests
-```
-
-The real-DTB integration test runs when the `libfdt` Python binding (`pylibfdt`) is available. Otherwise that specific integration test is skipped while unit tests continue to run.
 
 ## Project status
 

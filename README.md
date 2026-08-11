@@ -4,7 +4,7 @@ VMAX is an **Embedded System Topology & Correlation Explorer** for understanding
 
 The project starts with Device Tree exploration and is designed to grow toward correlation across devices, drivers, MMIO, IRQs, DMA/IOMMU/IOVA, kernel symbols, snapshots, and SoC-specific plugins.
 
-> Status: early development. V0.1 currently provides DTB parsing, a FastAPI backend, a TypeScript API client, and a React Device Tree browser.
+> **v0.1.0 — Device Tree Explorer:** the first public development release of VMAX, focused on loading compiled DTBs, browsing their hierarchy, inspecting node properties, and searching the tree from a browser UI.
 
 ## Why VMAX
 
@@ -20,9 +20,9 @@ Low-level Linux and embedded debugging often requires jumping between multiple v
 
 VMAX aims to correlate those views into one consistent model instead of treating them as separate tools and files.
 
-## Current V0.1 scope
+## v0.1.0 scope
 
-The current implementation focuses on loading a DTB and exposing it through a browser-based Device Tree explorer:
+VMAX v0.1.0 implements a complete Device Tree exploration path:
 
 ```text
 .dtb
@@ -49,13 +49,16 @@ FastAPI + Pydantic API schema
 TypeScript API client
   |
   v
-React DeviceTreeView
+React
+  ├── Search
+  ├── DeviceTreeView
+  └── PropertyPanel
 ```
 
-Implemented pieces include:
+Implemented in v0.1.0:
 
 - `DeviceTree`, `DeviceTreeNode`, `DeviceTreeProperty`, and `ParseResult` domain models
-- conservative property decoding for boolean, string, string-list, cell, and unknown values
+- conservative property decoding for boolean, string, string-list, cells, bytes, and unknown values
 - direct DTB parsing through `pylibfdt`
 - recursive node/property traversal
 - preservation of raw property bytes
@@ -64,10 +67,14 @@ Implemented pieces include:
 - Pydantic response schemas and OpenAPI contract
 - TypeScript API models and API client
 - React/Vite Device Tree browser with recursive expand/collapse
-- backend, API-client, and frontend component tests
-- validation with a Raspberry Pi 5 DTB
+- selected-node property inspector with raw-hex inspection and copy controls
+- local search by node name, path, compatible value, and property name
+- automatic ancestor expansion and scroll-to-selection from search results
+- responsive developer-tool-oriented UI
+- backend, API-client, search, and frontend component tests
+- real-DTB validation with Raspberry Pi 5 and two Renesas R-Car DTB configurations
 
-V0.1 intentionally does **not** yet include `/proc`, `/sys`, runtime driver correlation, MMIO interpretation, IRQ runtime data, DMA/IOMMU analysis, WebSocket events, or SoC-specific behavior.
+v0.1.0 intentionally does **not** yet include `/proc`, `/sys`, runtime driver correlation, MMIO interpretation, IRQ runtime data, DMA/IOMMU analysis, WebSocket events, or SoC-specific semantic behavior.
 
 ## Architecture direction
 
@@ -113,18 +120,18 @@ SoC plugins
 
 ## Roadmap
 
-- **V0.1 — Device Tree Explorer**: DTB parsing, domain model, API, tree browser, property panel, search
-- **V0.2 — Memory/MMIO Map**: interpret `reg`, `ranges`, reserved memory, and address cells
-- **V0.3 — Linux Runtime Explorer**: `/sys`, `/proc`, devices and runtime resources
-- **V0.4 — DT ↔ Device ↔ Driver correlation**
-- **V0.5 — IRQ and dependency graph**
-- **V0.6 — PCIe topology and snapshots**
-- **V0.7 — IOMMU/DMA foundation**
-- **V0.8 — Live event engine**
-- **V0.9 — R-Car/IPMMU plugin**
-- **V1.0 — Diff, diagnostics, packaging and tests**
+- **v0.1 — Device Tree Explorer**: DTB parsing, domain model, API, tree browser, property panel, search — **complete**
+- **v0.2 — Memory/MMIO Map**: interpret `reg`, `ranges`, reserved memory, and address cells
+- **v0.3 — Linux Runtime Explorer**: `/sys`, `/proc`, devices and runtime resources
+- **v0.4 — DT ↔ Device ↔ Driver correlation**
+- **v0.5 — IRQ and dependency graph**
+- **v0.6 — PCIe topology and snapshots**
+- **v0.7 — IOMMU/DMA foundation**
+- **v0.8 — Live event engine**
+- **v0.9 — R-Car/IPMMU plugin**
+- **v1.0 — Diff, diagnostics, packaging and tests**
 
-QNX support is planned after the Linux-oriented V1.0 core is stable.
+QNX support is planned after the Linux-oriented v1.0 core is stable.
 
 ## Repository layout
 
@@ -143,6 +150,7 @@ frontend/
 │   ├── api/
 │   ├── components/
 │   ├── models/
+│   ├── search/
 │   ├── App.tsx
 │   └── main.tsx
 ├── package.json
@@ -199,6 +207,7 @@ Optional validation:
 ```powershell
 npm test
 npm run typecheck
+npm run build
 ```
 
 ### 2. Backend prerequisites in WSL / Ubuntu
@@ -310,7 +319,12 @@ pylibfdt
 DTB
 ```
 
-The browser should display the root `/` node, its immediate children, a total node count, and expandable/collapsible Device Tree nodes.
+The browser should provide:
+
+- expandable/collapsible Device Tree navigation
+- selected-node property inspection
+- decoded property values with optional raw-hex inspection
+- local search and navigation to matching nodes
 
 ## Tests
 
@@ -321,14 +335,25 @@ export PYTHONPATH=backend
 uv run --extra dev python -m unittest discover -s backend/tests -v
 ```
 
-Run frontend tests and type checking from `frontend/`:
+Run frontend tests, type checking, and the production build from `frontend/`:
 
 ```bash
 npm test
 npm run typecheck
+npm run build
 ```
 
 The real-DTB backend path requires the `libfdt` Python binding (`pylibfdt`).
+
+## Validation
+
+v0.1.0 has been manually exercised with real compiled Device Trees from:
+
+- Raspberry Pi 5
+- Renesas R-Car DTB configuration #1
+- Renesas R-Car DTB configuration #2
+
+The validation covers parsing, tree rendering, node inspection, search, search-result navigation, and reload behavior.
 
 ## Design principles
 
@@ -336,9 +361,9 @@ The real-DTB backend path requires the `libfdt` Python binding (`pylibfdt`).
 - **Prefer known semantics over heuristics**: property-name knowledge wins over byte-pattern guessing.
 - **Be conservative when uncertain**: ambiguous values remain `UNKNOWN` rather than being misclassified.
 - **Keep libfdt behind an adapter boundary**: pylibfdt objects do not leak into the domain model.
-- **Separate syntax from semantics**: V0.1 decodes representation; later versions interpret `reg`, `ranges`, IRQs, and other hardware meaning.
-- **Keep the core generic**: Raspberry Pi and R-Car should use the same parser/model contracts.
+- **Separate syntax from semantics**: v0.1 decodes representation; later versions interpret `reg`, `ranges`, IRQs, and other hardware meaning.
+- **Keep the core generic**: Raspberry Pi and R-Car use the same parser/model contracts.
 
 ## Project status
 
-VMAX is currently under active early development. Interfaces, package layout, and roadmap details may still change before the first public release.
+VMAX v0.1.0 is the first public development release. The project remains pre-1.0, so interfaces and package layout may evolve as the roadmap moves toward runtime correlation and hardware-resource analysis.

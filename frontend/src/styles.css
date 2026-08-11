@@ -355,7 +355,7 @@ button {
   align-items: center;
   display: flex;
   min-height: 28px;
-  padding-right: 12px;
+  padding-right: 8px;
   position: relative;
   white-space: nowrap;
 }
@@ -403,9 +403,11 @@ button {
   border: 0;
   cursor: pointer;
   display: inline-flex;
+  flex: 1 1 auto;
   gap: 8px;
   min-width: 0;
-  padding: 0 2px;
+  min-height: 28px;
+  padding: 0 8px 0 2px;
   text-align: left;
 }
 

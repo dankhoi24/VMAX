@@ -82,7 +82,7 @@ type JsonReadResult =
 async function readJson(response: Response): Promise<JsonReadResult> {
   const text = await response.text();
   if (!text) {
-    return { ok: true, value: null };
+    return { ok: false, value: null };
   }
 
   try {

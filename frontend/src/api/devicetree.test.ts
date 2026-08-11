@@ -128,4 +128,15 @@ describe("devicetree API client", () => {
       message: "Invalid JSON response",
     } satisfies Partial<ApiError>);
   });
+
+  it("throws ApiError for successful empty responses", async () => {
+    const { fetchImpl } = createFetch(textResponse(""));
+
+    await expect(getMetadata({ fetchImpl })).rejects.toMatchObject({
+      name: "ApiError",
+      status: 200,
+      detail: null,
+      message: "Invalid JSON response",
+    } satisfies Partial<ApiError>);
+  });
 });

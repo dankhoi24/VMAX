@@ -57,6 +57,10 @@ describe("SearchBox", () => {
   it("renders local search results for a query", () => {
     render(<SearchBox root={tree} onSelectResult={() => undefined} />);
 
+    expect(
+      screen.getByPlaceholderText("Search nodes, paths, properties..."),
+    ).toBeTruthy();
+
     fireEvent.change(screen.getByRole("searchbox", { name: "Search Device Tree" }), {
       target: { value: "uart" },
     });

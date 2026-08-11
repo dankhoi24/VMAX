@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, getDeviceTree } from "./api/devicetree";
 import { DeviceTreeView } from "./components/DeviceTreeView";
+import { RefreshIcon } from "./components/icons";
 import { PropertyPanel } from "./components/PropertyPanel";
 import { SearchBox } from "./components/SearchBox";
 import type { DeviceTreeNode, DeviceTreeResponse } from "./models/devicetree";
@@ -61,14 +62,19 @@ export function App() {
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div>
+        <div className="app-brand">
           <h1>VMAX</h1>
-          <p>Device Tree</p>
+          <span>Device Tree Explorer</span>
         </div>
         <button className="reload-button" type="button" onClick={loadTree}>
+          <RefreshIcon className="button-icon" />
           Reload
         </button>
       </header>
+
+      {state.status === "success" && (
+        <SearchBox root={state.tree.root} onSelectResult={selectNode} />
+      )}
 
       {state.status === "loading" && (
         <section className="status-panel" aria-live="polite">
@@ -92,17 +98,14 @@ export function App() {
 
       {state.status === "success" && (
         <div className="workspace-grid">
-          <div className="tree-column">
-            <SearchBox root={state.tree.root} onSelectResult={selectNode} />
-            <DeviceTreeView
-              root={state.tree.root}
-              nodeCount={state.tree.node_count}
-              expandedPaths={expandedPaths}
-              selectedPath={selectedNode?.path ?? null}
-              onToggleNode={toggleNode}
-              onSelectNode={selectNode}
-            />
-          </div>
+          <DeviceTreeView
+            root={state.tree.root}
+            nodeCount={state.tree.node_count}
+            expandedPaths={expandedPaths}
+            selectedPath={selectedNode?.path ?? null}
+            onToggleNode={toggleNode}
+            onSelectNode={selectNode}
+          />
           <PropertyPanel node={selectedNode} />
         </div>
       )}

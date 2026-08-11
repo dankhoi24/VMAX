@@ -79,7 +79,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("0 properties")).toBeTruthy();
+    expect(await screen.findByText("Properties")).toBeTruthy();
     expect(screen.queryByText("compatible")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "soc@107c000000" }));
@@ -94,7 +94,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("0 properties")).toBeTruthy();
+    expect(await screen.findByText("Properties")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^uart@1000$/ })).toBeNull();
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Search Device Tree" }), {

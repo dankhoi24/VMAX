@@ -1,4 +1,5 @@
 import type { DeviceTreeNode } from "../models/devicetree";
+import { NodeIcon, TreeIcon } from "./icons";
 
 interface DeviceTreeViewProps {
   root: DeviceTreeNode;
@@ -20,7 +21,10 @@ export function DeviceTreeView({
   return (
     <section className="tree-surface" aria-label="Device Tree">
       <div className="tree-toolbar">
-        <h2>Device Tree</h2>
+        <div className="panel-title">
+          <TreeIcon className="panel-icon" />
+          <h2>Device Tree</h2>
+        </div>
         <span>{nodeCount.toLocaleString()} nodes</span>
       </div>
       <div className="tree-scroll">
@@ -59,6 +63,7 @@ function DeviceTreeNodeView({
   const hasChildren = node.children.length > 0;
   const isExpanded = expandedPaths.has(node.path);
   const isSelected = selectedPath === node.path;
+  const guides = Array.from({ length: depth }, (_, index) => index);
 
   return (
     <li
@@ -71,6 +76,13 @@ function DeviceTreeNodeView({
         className={isSelected ? "tree-row tree-row-selected" : "tree-row"}
         style={{ paddingLeft: 12 + depth * 20 }}
       >
+        {guides.map((index) => (
+          <span
+            className="tree-guide"
+            key={index}
+            style={{ left: 24 + index * 20 }}
+          />
+        ))}
         {hasChildren ? (
           <button
             className="tree-toggle"
@@ -90,6 +102,7 @@ function DeviceTreeNodeView({
           onClick={() => onSelectNode(node)}
           aria-current={isSelected ? "true" : undefined}
         >
+          <NodeIcon className="tree-node-icon" />
           <span className="tree-node-name">{node.full_name}</span>
         </button>
         {node.children.length > 0 && (

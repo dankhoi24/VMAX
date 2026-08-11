@@ -68,5 +68,19 @@ describe("PropertyPanel", () => {
     expect(screen.getByText("ranges")).toBeTruthy();
     expect(screen.getByText("[0,0,1,0]")).toBeTruthy();
     expect(screen.getByText("00000000000000000000000100000000")).toBeTruthy();
+    expect(screen.getAllByText("Raw (hex)")).toHaveLength(3);
+  });
+
+  it("renders copy controls for useful node and property values", () => {
+    render(<PropertyPanel node={node} />);
+
+    expect(screen.getByRole("button", { name: "Copy Path" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy compatible value" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", {
+        name: "Copy compatible raw hex",
+        hidden: true,
+      }),
+    ).toBeTruthy();
   });
 });

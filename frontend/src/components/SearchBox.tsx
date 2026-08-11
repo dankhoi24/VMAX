@@ -5,6 +5,7 @@ import {
   searchDeviceTree,
   type DeviceTreeSearchResult,
 } from "../search/devicetreeSearch";
+import { SearchIcon } from "./icons";
 
 interface SearchBoxProps {
   root: DeviceTreeNode;
@@ -18,23 +19,23 @@ export function SearchBox({ root, onSelectResult }: SearchBoxProps) {
 
   return (
     <section className="search-panel" aria-label="Device Tree search">
-      <div className="search-header">
-        <h2>Search</h2>
+      <div className="search-input-shell">
+        <SearchIcon className="search-input-icon" />
+        <input
+          className="search-input"
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label="Search Device Tree"
+          placeholder="Search nodes, paths, properties..."
+        />
         {hasQuery && (
-          <span>
+          <span className="search-count">
             {results.length.toLocaleString()}{" "}
             {results.length === 1 ? "match" : "matches"}
           </span>
         )}
       </div>
-      <input
-        className="search-input"
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        aria-label="Search Device Tree"
-        placeholder="Search"
-      />
 
       {hasQuery && results.length === 0 && (
         <p className="search-empty">No matches</p>

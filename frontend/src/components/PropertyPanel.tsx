@@ -3,6 +3,7 @@ import type {
   DeviceTreeProperty,
   PropertyValue,
 } from "../models/devicetree";
+import { CopyIcon, NodeIcon, PropertiesIcon } from "./icons";
 
 interface PropertyPanelProps {
   node: DeviceTreeNode | null;
@@ -12,7 +13,10 @@ export function PropertyPanel({ node }: PropertyPanelProps) {
   if (!node) {
     return (
       <aside className="property-panel" aria-label="Node properties">
-        <div className="property-panel-empty">Select a node to inspect.</div>
+        <div className="property-panel-empty">
+          <NodeIcon className="empty-icon" />
+          <span>Select a node to inspect.</span>
+        </div>
       </aside>
     );
   }
@@ -20,19 +24,37 @@ export function PropertyPanel({ node }: PropertyPanelProps) {
   return (
     <aside className="property-panel" aria-label="Node properties">
       <div className="property-panel-header">
-        <h2>Node</h2>
-        <span>{node.properties.length.toLocaleString()} properties</span>
+        <div className="panel-title">
+          <NodeIcon className="panel-icon" />
+          <h2>Node</h2>
+        </div>
       </div>
 
       <dl className="node-metadata">
-        <MetadataField label="full_name" value={node.full_name} />
-        <MetadataField label="path" value={node.path} />
-        <MetadataField label="unit_address" value={node.unit_address} />
-        <MetadataField label="parent_path" value={node.parent_path} />
+        <MetadataField
+          label="Full Name"
+          value={node.full_name}
+          copyValue={node.full_name}
+        />
+        <MetadataField label="Path" value={node.path} copyValue={node.path} />
+        <MetadataField label="Unit Address" value={node.unit_address} />
+        <MetadataField
+          label="Parent Path"
+          value={node.parent_path}
+          copyValue={node.parent_path}
+        />
       </dl>
 
       <section className="properties-section" aria-labelledby="properties-heading">
-        <h3 id="properties-heading">Properties</h3>
+        <div className="properties-heading-row">
+          <div className="panel-title">
+            <PropertiesIcon className="panel-icon" />
+            <h3 id="properties-heading">Properties</h3>
+          </div>
+          <span className="property-count-badge">
+            {node.properties.length.toLocaleString()}
+          </span>
+        </div>
         {node.properties.length === 0 ? (
           <p className="property-empty">No properties</p>
         ) : (
@@ -50,14 +72,18 @@ export function PropertyPanel({ node }: PropertyPanelProps) {
 interface MetadataFieldProps {
   label: string;
   value: string | null;
+  copyValue?: string | null;
 }
 
-function MetadataField({ label, value }: MetadataFieldProps) {
+function MetadataField({ label, value, copyValue }: MetadataFieldProps) {
+  const displayValue = value ?? "-";
+
   return (
     <div className="metadata-row">
       <dt>{label}</dt>
       <dd>
-        <code>{value ?? "null"}</code>
+        <code>{displayValue}</code>
+        {copyValue && <CopyButton value={copyValue} label={label} />}
       </dd>
     </div>
   );
@@ -68,6 +94,9 @@ interface PropertyItemProps {
 }
 
 function PropertyItem({ property }: PropertyItemProps) {
+  const formattedValue = formatPropertyValue(property.value);
+  const rawValue = property.raw_hex || "(empty)";
+
   return (
     <li className="property-item">
       <div className="property-item-header">
@@ -78,16 +107,24 @@ function PropertyItem({ property }: PropertyItemProps) {
         <div>
           <dt>value</dt>
           <dd>
-            <code>{formatPropertyValue(property.value)}</code>
-          </dd>
-        </div>
-        <div>
-          <dt>raw_hex</dt>
-          <dd>
-            <code>{property.raw_hex || "(empty)"}</code>
+            <code>{formattedValue}</code>
+            <CopyButton
+              value={formattedValue}
+              label={`${property.name} value`}
+            />
           </dd>
         </div>
       </dl>
+      <details className="raw-detail">
+        <summary>Raw (hex)</summary>
+        <div className="raw-detail-content">
+          <code>{rawValue}</code>
+          <CopyButton
+            value={property.raw_hex}
+            label={`${property.name} raw hex`}
+          />
+        </div>
+      </details>
     </li>
   );
 }
@@ -102,4 +139,29 @@ function formatPropertyValue(value: PropertyValue): string {
   }
 
   return String(value);
+}
+
+interface CopyButtonProps {
+  label: string;
+  value: string;
+}
+
+function CopyButton({ label, value }: CopyButtonProps) {
+  return (
+    <button
+      className="copy-button"
+      type="button"
+      onClick={() => copyToClipboard(value)}
+      aria-label={`Copy ${label}`}
+    >
+      <CopyIcon className="copy-icon" />
+      Copy
+    </button>
+  );
+}
+
+function copyToClipboard(value: string) {
+  if (navigator.clipboard) {
+    void navigator.clipboard.writeText(value);
+  }
 }

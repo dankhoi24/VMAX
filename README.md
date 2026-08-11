@@ -43,14 +43,15 @@ $env:PYTHONPATH = "backend"
 uv run --extra dev python -m unittest discover -s backend/tests -v
 ```
 
-## Frontend Contract
+## Frontend
 
-The V0.1 frontend starts with TypeScript models and a small API client only.
-Install frontend dependencies and typecheck when Node.js is available:
+The V0.1 frontend uses React/Vite to fetch and render the Device Tree. Vite
+proxies `/api` requests to the FastAPI backend on `localhost:8000`.
 
 ```powershell
 cd frontend
 npm install
 npm test
 npm run typecheck
+npm run dev
 ```

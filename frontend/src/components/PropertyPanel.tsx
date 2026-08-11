@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
+
 import type {
   DeviceTreeNode,
   DeviceTreeProperty,
   PropertyValue,
 } from "../models/devicetree";
-import { CopyIcon, NodeIcon, PropertiesIcon } from "./icons";
+import { CheckIcon, CopyIcon, NodeIcon, PropertiesIcon } from "./icons";
 
 interface PropertyPanelProps {
   node: DeviceTreeNode | null;
@@ -147,21 +149,41 @@ interface CopyButtonProps {
 }
 
 function CopyButton({ label, value }: CopyButtonProps) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setCopied(false), 3000);
+    return () => window.clearTimeout(timeoutId);
+  }, [copied]);
+
+  const handleCopy = () => {
+    copyToClipboard(value);
+    setCopied(true);
+  };
+
   return (
     <button
-      className="copy-button"
+      className={copied ? "copy-button copy-button-copied" : "copy-button"}
       type="button"
-      onClick={() => copyToClipboard(value)}
-      aria-label={`Copy ${label}`}
+      onClick={handleCopy}
+      aria-label={copied ? `Copied ${label}` : `Copy ${label}`}
+      title={copied ? "Copied" : `Copy ${label}`}
     >
-      <CopyIcon className="copy-icon" />
-      Copy
+      {copied ? (
+        <CheckIcon className="copy-icon" />
+      ) : (
+        <CopyIcon className="copy-icon" />
+      )}
     </button>
   );
 }
 
 function copyToClipboard(value: string) {
   if (navigator.clipboard) {
-    void navigator.clipboard.writeText(value);
+    void navigator.clipboard.writeText(value).catch(() => undefined);
   }
 }

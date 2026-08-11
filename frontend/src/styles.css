@@ -586,15 +586,22 @@ button {
   cursor: pointer;
   display: inline-flex;
   flex: 0 0 auto;
-  font-size: 12px;
-  gap: 5px;
+  height: 30px;
+  justify-content: center;
   min-height: 28px;
-  padding: 4px 8px;
+  padding: 0;
+  width: 30px;
 }
 
 .copy-button:hover {
   background: var(--accent-soft);
   border-color: var(--border-strong);
+}
+
+.copy-button-copied {
+  background: #f6e4ec;
+  border-color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .copy-icon {

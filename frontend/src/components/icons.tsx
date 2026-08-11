@@ -2,6 +2,14 @@ interface IconProps {
   className?: string;
 }
 
+export function CheckIcon({ className }: IconProps) {
+  return (
+    <svg className={className} aria-hidden="true" viewBox="0 0 24 24">
+      <path d="m5 12 5 5L20 7" />
+    </svg>
+  );
+}
+
 export function CopyIcon({ className }: IconProps) {
   return (
     <svg className={className} aria-hidden="true" viewBox="0 0 24 24">

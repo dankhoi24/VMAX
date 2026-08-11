@@ -1,10 +1,13 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PropertyPanel } from "./PropertyPanel";
 import type { DeviceTreeNode } from "../models/devicetree";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 const node: DeviceTreeNode = {
   id: "/soc@107c000000",
@@ -82,5 +85,29 @@ describe("PropertyPanel", () => {
         hidden: true,
       }),
     ).toBeTruthy();
+  });
+
+  it("shows a temporary copied state after copying", () => {
+    vi.useFakeTimers();
+    const clipboard = {
+      writeText: vi.fn(() => Promise.resolve()),
+    };
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: clipboard,
+    });
+
+    render(<PropertyPanel node={node} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy Path" }));
+
+    expect(clipboard.writeText).toHaveBeenCalledWith("/soc@107c000000");
+    expect(screen.getByRole("button", { name: "Copied Path" })).toBeTruthy();
+
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    expect(screen.getByRole("button", { name: "Copy Path" })).toBeTruthy();
   });
 });

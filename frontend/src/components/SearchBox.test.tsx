@@ -88,6 +88,28 @@ describe("SearchBox", () => {
     expect(onSelectResult).toHaveBeenCalledWith(tree.children[0].children[0]);
   });
 
+  it("closes results after selecting and reopens them on input focus", () => {
+    render(<SearchBox root={tree} onSelectResult={() => undefined} />);
+
+    const input = screen.getByRole("searchbox", { name: "Search Device Tree" });
+    fireEvent.change(input, {
+      target: { value: "pl011" },
+    });
+
+    expect(screen.getByText("/soc/uart@1000")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /\/soc\/uart@1000/,
+      }),
+    );
+
+    expect(screen.queryByText("/soc/uart@1000")).toBeNull();
+
+    fireEvent.focus(input);
+
+    expect(screen.getByText("/soc/uart@1000")).toBeTruthy();
+  });
+
   it("renders no matches for unmatched queries", () => {
     render(<SearchBox root={tree} onSelectResult={() => undefined} />);
 

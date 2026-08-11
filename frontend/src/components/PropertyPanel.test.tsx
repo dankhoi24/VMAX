@@ -60,11 +60,16 @@ describe("PropertyPanel", () => {
 
     expect(screen.getByText("compatible")).toBeTruthy();
     expect(screen.getByText("string_list")).toBeTruthy();
+    expect(
+      screen.getByText("string_list").classList.contains("property-kind-string-list"),
+    ).toBe(true);
     expect(screen.getByText("[\"simple-bus\"]")).toBeTruthy();
     expect(screen.getByText("73696d706c652d62757300")).toBeTruthy();
 
     expect(screen.getByText("#address-cells")).toBeTruthy();
-    expect(screen.getAllByText("cells")).toHaveLength(2);
+    const cellBadges = screen.getAllByText("cells");
+    expect(cellBadges).toHaveLength(2);
+    expect(cellBadges[0].classList.contains("property-kind-cells")).toBe(true);
     expect(screen.getByText("[2]")).toBeTruthy();
     expect(screen.getByText("00000002")).toBeTruthy();
 
@@ -87,7 +92,7 @@ describe("PropertyPanel", () => {
     ).toBeTruthy();
   });
 
-  it("shows a temporary copied state after copying", () => {
+  it("shows a temporary copied state after copying succeeds", async () => {
     vi.useFakeTimers();
     const clipboard = {
       writeText: vi.fn(() => Promise.resolve()),
@@ -99,7 +104,9 @@ describe("PropertyPanel", () => {
 
     render(<PropertyPanel node={node} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy Path" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy Path" }));
+    });
 
     expect(clipboard.writeText).toHaveBeenCalledWith("/soc@107c000000");
     expect(screen.getByRole("button", { name: "Copied Path" })).toBeTruthy();
@@ -108,6 +115,26 @@ describe("PropertyPanel", () => {
       vi.advanceTimersByTime(3000);
     });
 
+    expect(screen.getByRole("button", { name: "Copy Path" })).toBeTruthy();
+  });
+
+  it("keeps the normal copy state when copying fails", async () => {
+    const clipboard = {
+      writeText: vi.fn(() => Promise.reject(new Error("denied"))),
+    };
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: clipboard,
+    });
+
+    render(<PropertyPanel node={node} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy Path" }));
+    });
+
+    expect(clipboard.writeText).toHaveBeenCalledWith("/soc@107c000000");
+    expect(screen.queryByRole("button", { name: "Copied Path" })).toBeNull();
     expect(screen.getByRole("button", { name: "Copy Path" })).toBeTruthy();
   });
 });

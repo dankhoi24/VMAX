@@ -103,7 +103,9 @@ function PropertyItem({ property }: PropertyItemProps) {
     <li className="property-item">
       <div className="property-item-header">
         <span className="property-name">{property.name}</span>
-        <span className="property-kind">{property.kind}</span>
+        <span className={getPropertyKindClassName(property.kind)}>
+          {property.kind}
+        </span>
       </div>
       <dl className="property-fields">
         <div>
@@ -160,9 +162,10 @@ function CopyButton({ label, value }: CopyButtonProps) {
     return () => window.clearTimeout(timeoutId);
   }, [copied]);
 
-  const handleCopy = () => {
-    copyToClipboard(value);
-    setCopied(true);
+  const handleCopy = async () => {
+    if (await copyToClipboard(value)) {
+      setCopied(true);
+    }
   };
 
   return (
@@ -182,8 +185,19 @@ function CopyButton({ label, value }: CopyButtonProps) {
   );
 }
 
-function copyToClipboard(value: string) {
-  if (navigator.clipboard) {
-    void navigator.clipboard.writeText(value).catch(() => undefined);
+async function copyToClipboard(value: string): Promise<boolean> {
+  if (!navigator.clipboard) {
+    return false;
   }
+
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getPropertyKindClassName(kind: DeviceTreeProperty["kind"]): string {
+  return `property-kind property-kind-${kind.replace("_", "-")}`;
 }

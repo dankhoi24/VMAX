@@ -14,8 +14,20 @@ interface SearchBoxProps {
 
 export function SearchBox({ root, onSelectResult }: SearchBoxProps) {
   const [query, setQuery] = useState("");
+  const [resultsOpen, setResultsOpen] = useState(false);
   const results = useMemo(() => searchDeviceTree(root, query), [root, query]);
   const hasQuery = query.trim().length > 0;
+  const showResults = hasQuery && resultsOpen;
+
+  const handleQueryChange = (value: string) => {
+    setQuery(value);
+    setResultsOpen(value.trim().length > 0);
+  };
+
+  const handleSelectResult = (node: DeviceTreeNode) => {
+    onSelectResult(node);
+    setResultsOpen(false);
+  };
 
   return (
     <section className="search-panel" aria-label="Device Tree search">
@@ -25,7 +37,8 @@ export function SearchBox({ root, onSelectResult }: SearchBoxProps) {
           className="search-input"
           type="search"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => handleQueryChange(event.target.value)}
+          onFocus={() => setResultsOpen(hasQuery)}
           aria-label="Search Device Tree"
           placeholder="Search nodes, paths, properties..."
         />
@@ -37,17 +50,17 @@ export function SearchBox({ root, onSelectResult }: SearchBoxProps) {
         )}
       </div>
 
-      {hasQuery && results.length === 0 && (
+      {showResults && results.length === 0 && (
         <p className="search-empty">No matches</p>
       )}
 
-      {results.length > 0 && (
+      {showResults && results.length > 0 && (
         <ul className="search-results">
           {results.map((result) => (
             <SearchResultItem
               key={result.node.path}
               result={result}
-              onSelectResult={onSelectResult}
+              onSelectResult={handleSelectResult}
             />
           ))}
         </ul>

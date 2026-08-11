@@ -4,7 +4,12 @@ import importlib
 from pathlib import Path
 from typing import Protocol
 
-from app.model.devicetree import DeviceTree, DeviceTreeNode, ParseResult
+from app.model.devicetree import (
+    DeviceTree,
+    DeviceTreeNode,
+    DeviceTreeProperty,
+    ParseResult,
+)
 from app.parsers.devicetree.decoder import PropertyDecoder
 
 
@@ -21,7 +26,7 @@ class LibFdtDeviceTreeParser:
         decoder: PropertyDecoder | None = None,
         libfdt_module: _LibFdtModule | None = None,
     ) -> None:
-        self._decoder = decoder or PropertyDecoder()
+        self._decoder = decoder if decoder is not None else PropertyDecoder()
         self._libfdt_module = libfdt_module
 
     def parse(self, path: str | Path) -> ParseResult:
@@ -48,6 +53,7 @@ class LibFdtDeviceTreeParser:
                 parent_path=None,
                 libfdt=libfdt,
             )
+        # Parser boundary: convert libfdt/domain parsing failures into ParseResult.
         except Exception as exc:
             return ParseResult(
                 tree=None,
@@ -94,7 +100,7 @@ class LibFdtDeviceTreeParser:
         fdt: object,
         node_offset: int,
         libfdt: _LibFdtModule,
-    ):
+    ) -> tuple[DeviceTreeProperty, ...]:
         properties: list[tuple[str, bytes]] = []
         quiet_notfound = _quiet_notfound(libfdt)
         prop_offset = fdt.first_property_offset(node_offset, quiet=quiet_notfound)
@@ -112,7 +118,7 @@ class LibFdtDeviceTreeParser:
         node_offset: int,
         parent_path: str,
         libfdt: _LibFdtModule,
-    ):
+    ) -> tuple[DeviceTreeNode, ...]:
         children: list[DeviceTreeNode] = []
         quiet_notfound = _quiet_notfound(libfdt)
         child_offset = fdt.first_subnode(node_offset, quiet=quiet_notfound)

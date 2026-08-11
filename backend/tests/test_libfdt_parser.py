@@ -1,9 +1,13 @@
+import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
 
 from app.model.devicetree import PropertyKind
 from app.parsers.devicetree import LibFdtDeviceTreeParser
+
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 
 class FakeProperty(bytearray):
@@ -161,6 +165,36 @@ class LibFdtDeviceTreeParserTest(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.source, "bad.dtb")
         self.assertIn("Failed to parse DTB with pylibfdt", result.errors[0])
+
+
+class LibFdtDeviceTreeParserIntegrationTest(unittest.TestCase):
+    @unittest.skipUnless(
+        importlib.util.find_spec("libfdt") is not None,
+        "pylibfdt is not installed",
+    )
+    def test_parse_minimal_dtb_fixture_with_real_pylibfdt(self) -> None:
+        dtb_path = FIXTURES / "minimal.dtb"
+
+        result = LibFdtDeviceTreeParser().parse(dtb_path)
+
+        self.assertTrue(result.ok, result.errors)
+        self.assertEqual(result.source, str(dtb_path))
+        self.assertEqual(result.node_count, 3)
+
+        root = result.root
+        self.assertEqual(root.get_property("model").value, "VMAX Test Board")
+        self.assertEqual(root.get_property("compatible").value, ("vmax,test",))
+
+        soc = result.tree.get_node("/soc")
+        self.assertEqual(soc.get_property("#address-cells").value, (1,))
+        self.assertEqual(soc.get_property("#size-cells").value, (1,))
+
+        uart = result.tree.get_node("/soc/uart@1000")
+        self.assertEqual(uart.name, "uart")
+        self.assertEqual(uart.unit_address, "1000")
+        self.assertEqual(uart.get_property("compatible").value, ("test,uart",))
+        self.assertEqual(uart.get_property("reg").value, (0x1000, 0x100))
+        self.assertEqual(uart.get_property("status").value, "okay")
 
 
 if __name__ == "__main__":

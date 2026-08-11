@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { DeviceTreeNode } from "../models/devicetree";
 
@@ -8,14 +8,13 @@ interface DeviceTreeViewProps {
 }
 
 export function DeviceTreeView({ root, nodeCount }: DeviceTreeViewProps) {
-  const allPaths = useMemo(() => collectPaths(root), [root]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
-    () => new Set(allPaths),
+    () => new Set([root.path]),
   );
 
   useEffect(() => {
-    setExpandedPaths(new Set(allPaths));
-  }, [allPaths]);
+    setExpandedPaths(new Set([root.path]));
+  }, [root]);
 
   const toggleNode = (path: string) => {
     setExpandedPaths((current) => {
@@ -108,15 +107,4 @@ function DeviceTreeNodeView({
       )}
     </li>
   );
-}
-
-function collectPaths(root: DeviceTreeNode): string[] {
-  const paths: string[] = [];
-  const visit = (node: DeviceTreeNode) => {
-    paths.push(node.path);
-    node.children.forEach(visit);
-  };
-
-  visit(root);
-  return paths;
 }

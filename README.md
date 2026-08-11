@@ -42,3 +42,14 @@ GET /api/v1/devicetree
 $env:PYTHONPATH = "backend"
 uv run --extra dev python -m unittest discover -s backend/tests -v
 ```
+
+## Frontend Contract
+
+The V0.1 frontend starts with TypeScript models and a small API client only.
+Install frontend dependencies and typecheck when Node.js is available:
+
+```powershell
+cd frontend
+npm install
+npm run typecheck
+```

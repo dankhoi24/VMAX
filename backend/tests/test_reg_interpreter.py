@@ -67,6 +67,16 @@ class RegInterpreterTest(unittest.TestCase):
         self.assertEqual(regions[0].bus_address, 0x123456789ABCDEF01)
         self.assertEqual(regions[0].size, 0x20)
 
+    def test_combines_multiple_size_cells(self) -> None:
+        node = node_with_reg(0x1000, 0x00000001, 0x00000000)
+        cell_context = make_context(address_cells=1, size_cells=2)
+
+        regions, warnings = self.interpreter.interpret(node, cell_context)
+
+        self.assertEqual(warnings, ())
+        self.assertEqual(regions[0].bus_address, 0x1000)
+        self.assertEqual(regions[0].size, 0x1_00000000)
+
     def test_missing_reg_property_returns_no_regions_or_warnings(self) -> None:
         node = DeviceTreeNode(name="device", path="/soc/device", parent_path="/soc")
 
@@ -95,6 +105,22 @@ class RegInterpreterTest(unittest.TestCase):
         self.assertEqual(
             [warning.code for warning in warnings],
             ["ADDRESS_CELL_CONTEXT_UNRESOLVED"],
+        )
+
+    def test_context_source_must_match_node_parent(self) -> None:
+        node = node_with_reg(0x1000, 0x100)
+        cell_context = AddressCellContext(
+            address_cells=1,
+            size_cells=1,
+            source_node_path="/pcie",
+        )
+
+        regions, warnings = self.interpreter.interpret(node, cell_context)
+
+        self.assertEqual(regions, ())
+        self.assertEqual(
+            [warning.code for warning in warnings],
+            ["ADDRESS_CELL_CONTEXT_MISMATCH"],
         )
 
     def test_malformed_non_cells_reg_returns_warning_without_regions(self) -> None:

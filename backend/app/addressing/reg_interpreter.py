@@ -27,6 +27,22 @@ class RegInterpreter:
                 ),
             )
 
+        if (
+            node.parent_path is not None
+            and context.source_node_path != node.parent_path
+        ):
+            return (), (
+                AddressingWarning(
+                    code="ADDRESS_CELL_CONTEXT_MISMATCH",
+                    node_path=node.path,
+                    message=(
+                        f"Address cell context comes from "
+                        f"{context.source_node_path}, but node parent is "
+                        f"{node.parent_path}"
+                    ),
+                ),
+            )
+
         cells = _reg_cells(prop)
         if cells is None:
             return (), (

@@ -34,10 +34,14 @@ class AddressCellContext:
     used_default_size_cells: bool = False
 
     def __post_init__(self) -> None:
-        if self.address_cells < 0:
-            raise ValueError("AddressCellContext.address_cells must be >= 0")
-        if self.size_cells < 0:
-            raise ValueError("AddressCellContext.size_cells must be >= 0")
+        _validate_non_negative_int(
+            self.address_cells,
+            "AddressCellContext.address_cells",
+        )
+        _validate_non_negative_int(
+            self.size_cells,
+            "AddressCellContext.size_cells",
+        )
         if not self.source_node_path.startswith("/"):
             raise ValueError("AddressCellContext.source_node_path must be absolute")
 
@@ -171,10 +175,11 @@ def _validate_node_path(value: str, field_name: str) -> None:
 
 
 def _validate_index(value: int, field_name: str) -> None:
-    if value < 0:
-        raise ValueError(f"{field_name} must be >= 0")
+    _validate_non_negative_int(value, field_name)
 
 
 def _validate_non_negative_int(value: int, field_name: str) -> None:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"{field_name} must be an int")
     if value < 0:
         raise ValueError(f"{field_name} must be >= 0")

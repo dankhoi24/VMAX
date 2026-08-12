@@ -209,6 +209,30 @@ class AddressingModelTest(unittest.TestCase):
                 mapping_index=-1,
             )
 
+    def test_integer_fields_reject_float_and_bool_values(self) -> None:
+        with self.assertRaises(TypeError):
+            RegRegion(
+                node_path="/soc/test@0",
+                index=0,
+                bus_address=1.5,
+                size=1,
+            )
+
+        with self.assertRaises(TypeError):
+            RegRegion(
+                node_path="/soc/test@0",
+                index=0.5,
+                bus_address=1,
+                size=1,
+            )
+
+        with self.assertRaises(TypeError):
+            AddressCellContext(
+                address_cells=True,
+                size_cells=1,
+                source_node_path="/soc",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

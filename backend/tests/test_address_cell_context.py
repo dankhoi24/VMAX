@@ -172,7 +172,7 @@ class AddressCellContextResolverTest(unittest.TestCase):
         self.assertTrue(context.used_default_size_cells)
         self.assertEqual([warning.code for warning in warnings], ["PARENT_NODE_NOT_FOUND"])
 
-    def test_malformed_non_cell_property_uses_default_with_warning(self) -> None:
+    def test_malformed_non_cell_property_leaves_context_unresolved(self) -> None:
         malformed_address_cells = DeviceTreeProperty(
             name="#address-cells",
             raw_bytes=b"2\x00",
@@ -185,13 +185,13 @@ class AddressCellContextResolverTest(unittest.TestCase):
 
         context, warnings = self.resolver.resolve(uart, tree)
 
-        self.assertEqual(context.address_cells, 2)
-        self.assertEqual(context.size_cells, 1)
-        self.assertTrue(context.used_default_address_cells)
-        self.assertFalse(context.used_default_size_cells)
-        self.assertEqual([warning.code for warning in warnings], ["MALFORMED_ADDRESS_CELLS"])
+        self.assertIsNone(context)
+        self.assertEqual(
+            [warning.code for warning in warnings],
+            ["MALFORMED_ADDRESS_CELLS"],
+        )
 
-    def test_malformed_multiple_cell_value_uses_default_with_warning(self) -> None:
+    def test_malformed_multiple_cell_value_leaves_context_unresolved(self) -> None:
         tree, uart = make_tree(
             parent_properties=(
                 cells("#address-cells", 1),
@@ -201,11 +201,31 @@ class AddressCellContextResolverTest(unittest.TestCase):
 
         context, warnings = self.resolver.resolve(uart, tree)
 
-        self.assertEqual(context.address_cells, 1)
-        self.assertEqual(context.size_cells, 1)
-        self.assertFalse(context.used_default_address_cells)
-        self.assertTrue(context.used_default_size_cells)
-        self.assertEqual([warning.code for warning in warnings], ["MALFORMED_SIZE_CELLS"])
+        self.assertIsNone(context)
+        self.assertEqual(
+            [warning.code for warning in warnings],
+            ["MALFORMED_SIZE_CELLS"],
+        )
+
+    def test_malformed_property_does_not_use_missing_default_semantics(self) -> None:
+        malformed_address_cells = DeviceTreeProperty(
+            name="#address-cells",
+            raw_bytes=b"\x01\x02",
+            kind=PropertyKind.UNKNOWN,
+            value=None,
+        )
+        tree, uart = make_tree(
+            parent_properties=(
+                malformed_address_cells,
+                cells("#size-cells", 1),
+            )
+        )
+
+        context, warnings = self.resolver.resolve(uart, tree)
+
+        self.assertIsNone(context)
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0].code, "MALFORMED_ADDRESS_CELLS")
 
 
 def cells(name: str, *values: int) -> DeviceTreeProperty:

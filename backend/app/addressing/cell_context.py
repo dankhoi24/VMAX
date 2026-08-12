@@ -20,7 +20,7 @@ class AddressCellContextResolver:
         self,
         node: DeviceTreeNode,
         tree: DeviceTree,
-    ) -> tuple[AddressCellContext, tuple[AddressingWarning, ...]]:
+    ) -> tuple[AddressCellContext | None, tuple[AddressingWarning, ...]]:
         source_node, parent_warnings = self._get_source_node(node, tree)
 
         if source_node is None:
@@ -50,6 +50,10 @@ class AddressCellContextResolver:
             malformed_code="MALFORMED_SIZE_CELLS",
         )
 
+        warnings = parent_warnings + address_warnings + size_warnings
+        if address_cells is None or size_cells is None:
+            return None, warnings
+
         context = AddressCellContext(
             address_cells=address_cells,
             size_cells=size_cells,
@@ -57,7 +61,6 @@ class AddressCellContextResolver:
             used_default_address_cells=used_default_address_cells,
             used_default_size_cells=used_default_size_cells,
         )
-        warnings = parent_warnings + address_warnings + size_warnings
         return context, warnings
 
     def _get_source_node(
@@ -97,7 +100,7 @@ class AddressCellContextResolver:
         default_value: int,
         default_code: str,
         malformed_code: str,
-    ) -> tuple[int, bool, tuple[AddressingWarning, ...]]:
+    ) -> tuple[int | None, bool, tuple[AddressingWarning, ...]]:
         prop = source_node.get_property(property_name)
         if prop is None:
             return default_value, True, (
@@ -113,13 +116,13 @@ class AddressCellContextResolver:
 
         value = _single_cell_value(prop)
         if value is None:
-            return default_value, True, (
+            return None, False, (
                 AddressingWarning(
                     code=malformed_code,
                     node_path=source_node.path,
                     message=(
                         f"{property_name} on {source_node.path} must be a "
-                        f"single non-negative cell; using default {default_value}"
+                        "single non-negative cell; address cell context is unresolved"
                     ),
                 ),
             )

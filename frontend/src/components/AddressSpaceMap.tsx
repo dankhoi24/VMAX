@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { MemoryRegion } from "../models/addressing";
+import { CursorIcon, HandIcon } from "./icons";
 
 type RegionRelation = "normal" | "nested" | "overlap";
 type RegionDisplayMode = "full" | "compact" | "marker";
 type GapDisplayMode = "full" | "compact" | "marker";
-type InteractionMode = "pan" | "zoom";
+type InteractionMode = "default" | "hand";
 
 type NormalizedRegion =
   | {
@@ -39,8 +40,6 @@ interface PointerGesture {
   startY: number;
   initialViewportStart: bigint;
   initialViewportSpan: bigint;
-  anchorAddress: bigint;
-  anchorPixelY: number;
 }
 
 export interface AddressSpaceRegionEntry {
@@ -112,7 +111,6 @@ const REGION_FULL_HEIGHT = 32;
 const GAP_COMPACT_HEIGHT = 4;
 const GAP_FULL_HEIGHT = 24;
 const CLUSTER_DISTANCE = 14;
-const ZOOM_DRAG_STEP_PIXELS = 80;
 const PLOT_HEIGHT = 520;
 const PLOT_HEIGHT_BIGINT = BigInt(PLOT_HEIGHT);
 
@@ -143,14 +141,13 @@ export function AddressSpaceMap({
     number | null
   >(null);
   const [interactionMode, setInteractionMode] =
-    useState<InteractionMode>("pan");
+    useState<InteractionMode>("default");
   const [viewportState, setViewportState] = useState<ViewportState | null>(null);
   const [drag, setDrag] = useState<PointerGesture | null>(null);
   const viewport = clampViewport(
     model.range,
     viewportState ?? getFullViewport(model.range),
   );
-  const panPercent = getPanPercent(model.range, viewport);
   const selectedFocusRange = useMemo(
     () =>
       selectedResourceIndex !== null && selectedRegions[selectedResourceIndex]
@@ -221,40 +218,22 @@ export function AddressSpaceMap({
     setViewportState(getCenteredViewport(model.range, center, nextSpan));
   }
 
-  function updatePan(nextPanPercent: number) {
-    const available = getPanAvailable(model.range, viewport.span);
-
-    if (available === 0n) {
-      setViewportState(getFullViewport(model.range));
+  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (interactionMode !== "hand") {
       return;
     }
 
-    setViewportState(
-      clampViewport(model.range, {
-        start:
-          model.range.start +
-          (available * BigInt(clampPercent(nextPanPercent))) / 1000n,
-        span: viewport.span,
-      }),
-    );
-  }
-
-  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button > 0) {
       return;
     }
 
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    const anchorPixelY = getPointerPixelY(event);
-    const pointerClientY = getPointerClientY(event, anchorPixelY);
 
     setDrag({
-      anchorAddress: getAddressAtPixel(anchorPixelY, viewport),
-      anchorPixelY,
       initialViewportSpan: viewport.span,
       initialViewportStart: viewport.start,
       pointerId: event.pointerId,
-      startY: pointerClientY,
+      startY: getPointerClientY(event, PLOT_HEIGHT / 2),
     });
   }
 
@@ -266,18 +245,6 @@ export function AddressSpaceMap({
     const deltaPixels = Math.round(
       getPointerClientY(event, drag.startY) - drag.startY,
     );
-
-    if (interactionMode === "zoom") {
-      setViewportState(
-        getAnchoredViewport(
-          model.range,
-          drag.anchorAddress,
-          drag.anchorPixelY,
-          getDragZoomSpan(drag.initialViewportSpan, deltaPixels),
-        ),
-      );
-      return;
-    }
 
     const deltaAddress =
       (BigInt(deltaPixels) * drag.initialViewportSpan) / PLOT_HEIGHT_BIGINT;
@@ -297,6 +264,22 @@ export function AddressSpaceMap({
       }
       setDrag(null);
     }
+  }
+
+  function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
+    if (interactionMode !== "hand") {
+      return;
+    }
+
+    event.preventDefault();
+    const anchorPixelY = getWheelPixelY(event);
+    const anchorAddress = getAddressAtPixel(anchorPixelY, viewport);
+    const nextSpan =
+      event.deltaY > 0 ? viewport.span * 2n : ceilDiv(viewport.span, 2n);
+
+    setViewportState(
+      getAnchoredViewport(model.range, anchorAddress, anchorPixelY, nextSpan),
+    );
   }
 
   const visibleGaps = model.gaps.filter((gap) => intersects(gap, viewport));
@@ -335,27 +318,31 @@ export function AddressSpaceMap({
           <span className="address-space-toolbar-label">Interaction</span>
           <button
             className={
-              interactionMode === "pan"
+              interactionMode === "default"
                 ? "address-space-mode-button address-space-mode-button-active"
                 : "address-space-mode-button"
             }
             type="button"
-            aria-pressed={interactionMode === "pan"}
-            onClick={() => setInteractionMode("pan")}
+            aria-label="Default"
+            aria-pressed={interactionMode === "default"}
+            title="Scroll normally and select regions"
+            onClick={() => setInteractionMode("default")}
           >
-            Pan
+            <CursorIcon className="address-space-tool-icon" />
           </button>
           <button
             className={
-              interactionMode === "zoom"
+              interactionMode === "hand"
                 ? "address-space-mode-button address-space-mode-button-active"
                 : "address-space-mode-button"
             }
             type="button"
-            aria-pressed={interactionMode === "zoom"}
-            onClick={() => setInteractionMode("zoom")}
+            aria-label="Hand"
+            aria-pressed={interactionMode === "hand"}
+            title="Wheel to zoom, drag to pan"
+            onClick={() => setInteractionMode("hand")}
           >
-            Zoom
+            <HandIcon className="address-space-tool-icon" />
           </button>
         </div>
         <div className="address-space-tool-group" aria-label="Viewport controls">
@@ -428,6 +415,7 @@ export function AddressSpaceMap({
           <div
             className={plotClassName}
             aria-label="CPU Physical Address Space"
+            onWheel={handleWheel}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerEnd}
@@ -486,19 +474,6 @@ export function AddressSpaceMap({
             </div>
           </div>
         </div>
-
-        <label className="address-space-pan">
-          <span>Pan</span>
-          <input
-            type="range"
-            min="0"
-            max="1000"
-            value={panPercent}
-            onChange={(event) => updatePan(Number(event.target.value))}
-            disabled={viewport.span >= model.range.span}
-            aria-label="Pan address space"
-          />
-        </label>
       </div>
     </div>
   );
@@ -933,7 +908,7 @@ function getAnchoredViewport(
   anchorPixelY: number,
   requestedSpan: bigint,
 ): ViewportState {
-  const pixel = BigInt(clampPixel(Math.round(anchorPixelY), 0, PLOT_HEIGHT));
+  const pixel = BigInt(clampPlotPixel(anchorPixelY));
   const span =
     requestedSpan < 1n
       ? 1n
@@ -945,17 +920,6 @@ function getAnchoredViewport(
     start: anchorAddress - (span * pixel) / PLOT_HEIGHT_BIGINT,
     span,
   });
-}
-
-function getDragZoomSpan(initialSpan: bigint, deltaPixels: number): bigint {
-  const steps = Math.trunc(Math.abs(deltaPixels) / ZOOM_DRAG_STEP_PIXELS);
-
-  if (steps === 0) {
-    return initialSpan;
-  }
-
-  const factor = 1n << BigInt(steps);
-  return deltaPixels < 0 ? ceilDiv(initialSpan, factor) : initialSpan * factor;
 }
 
 function clampViewport(
@@ -982,26 +946,6 @@ function clampViewport(
     end,
     span,
   };
-}
-
-function getPanAvailable(
-  fullRange: AddressSpaceRange,
-  viewportSpan: bigint,
-): bigint {
-  return fullRange.span > viewportSpan ? fullRange.span - viewportSpan : 0n;
-}
-
-function getPanPercent(
-  fullRange: AddressSpaceRange,
-  viewport: AddressSpaceRange,
-): number {
-  const available = getPanAvailable(fullRange, viewport.span);
-
-  if (available === 0n) {
-    return 0;
-  }
-
-  return Number(((viewport.start - fullRange.start) * 1000n) / available);
 }
 
 function clusterRegionItems(items: RegionRenderItem[]): RegionRenderGroup[] {
@@ -1180,12 +1124,18 @@ function getAddressAtPixel(pixelY: number, viewport: AddressSpaceRange): bigint 
   );
 }
 
-function getPointerPixelY(event: React.PointerEvent<HTMLDivElement>): number {
-  const rect = event.currentTarget.getBoundingClientRect();
-  const rectTop = Number.isFinite(rect.top) ? rect.top : 0;
-  const clientY = getPointerClientY(event, rectTop + PLOT_HEIGHT / 2);
+function getWheelPixelY(event: React.WheelEvent<HTMLDivElement>): number {
+  return getElementPixelY(event.clientY, event.currentTarget);
+}
 
-  return clampPlotPixel(clientY - rectTop);
+function getElementPixelY(clientY: number, element: HTMLDivElement): number {
+  const rect = element.getBoundingClientRect();
+  const rectTop = Number.isFinite(rect.top) ? rect.top : 0;
+  const safeClientY = Number.isFinite(clientY)
+    ? clientY
+    : rectTop + PLOT_HEIGHT / 2;
+
+  return clampPlotPixel(safeClientY - rectTop);
 }
 
 function getPointerClientY(
@@ -1234,10 +1184,6 @@ function parseAddress(value: string | null): bigint | null {
 
 function ceilDiv(dividend: bigint, divisor: bigint): bigint {
   return (dividend + divisor - 1n) / divisor;
-}
-
-function clampPercent(value: number): number {
-  return Math.max(0, Math.min(1000, value));
 }
 
 function clampPixel(value: number, min: number, max: number): number {

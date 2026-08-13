@@ -860,6 +860,19 @@ button {
   color: var(--accent-strong);
 }
 
+.address-space-mode-button {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  min-width: 34px;
+}
+
+.address-space-tool-icon {
+  flex: 0 0 auto;
+  height: 16px;
+  width: 16px;
+}
+
 .address-space-resource-controls {
   display: flex;
   flex-wrap: wrap;
@@ -943,20 +956,16 @@ button {
   user-select: none;
 }
 
-.address-space-plot-pan {
+.address-space-plot-default {
+  cursor: default;
+}
+
+.address-space-plot-hand {
   cursor: grab;
 }
 
-.address-space-plot-pan-dragging {
+.address-space-plot-hand-dragging {
   cursor: grabbing;
-}
-
-.address-space-plot-zoom {
-  cursor: zoom-in;
-}
-
-.address-space-plot-zoom-dragging {
-  cursor: ns-resize;
 }
 
 .address-space-axis {
@@ -1251,19 +1260,6 @@ button {
 
 .address-space-unknown-device {
   color: #1e4f84;
-}
-
-.address-space-pan {
-  align-items: center;
-  color: var(--muted);
-  display: grid;
-  font-size: 12px;
-  gap: 8px;
-  grid-template-columns: 32px minmax(0, 1fr);
-}
-
-.address-space-pan input {
-  width: 100%;
 }
 
 .translation-resource-view {

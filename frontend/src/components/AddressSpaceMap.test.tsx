@@ -173,7 +173,7 @@ describe("AddressSpaceMap", () => {
     expect(screen.getByText("span 0x100000")).toBeTruthy();
   });
 
-  it("does not zoom with the mouse wheel", () => {
+  it("does not zoom with the mouse wheel in default mode", () => {
     render(
       <AddressSpaceMap
         regions={[
@@ -188,14 +188,21 @@ describe("AddressSpaceMap", () => {
       />,
     );
 
+    expect(
+      screen.getByRole("button", { name: "Default" }).getAttribute(
+        "aria-pressed",
+      ),
+    ).toBe("true");
+
     fireEvent.wheel(screen.getByLabelText("CPU Physical Address Space"), {
       deltaY: -120,
+      clientY: 260,
     });
 
     expect(screen.getByText("span 0x100000")).toBeTruthy();
   });
 
-  it("pans the viewport by dragging in pan mode", () => {
+  it("does not pan the viewport by dragging in default mode", () => {
     render(
       <AddressSpaceMap
         regions={[
@@ -228,11 +235,11 @@ describe("AddressSpaceMap", () => {
     });
 
     expect(screen.getByLabelText("Visible address range").textContent).toContain(
-      "0x20000",
+      "0x40000",
     );
   });
 
-  it("zooms around the pointer anchor by dragging upward in zoom mode", () => {
+  it("pans the viewport by dragging in hand mode", () => {
     render(
       <AddressSpaceMap
         regions={[
@@ -247,14 +254,8 @@ describe("AddressSpaceMap", () => {
       />,
     );
 
-    const panMode = screen.getByRole("button", { name: "Pan" });
-    const zoomMode = screen.getByRole("button", { name: "Zoom" });
-
-    expect(panMode.getAttribute("aria-pressed")).toBe("true");
-
-    fireEvent.click(zoomMode);
-
-    expect(zoomMode.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hand" }));
 
     const plot = screen.getByLabelText("CPU Physical Address Space");
     firePointerGestureEvent(plot, "pointerdown", {
@@ -263,12 +264,47 @@ describe("AddressSpaceMap", () => {
       pointerId: 1,
     });
     firePointerGestureEvent(plot, "pointermove", {
-      clientY: 180,
+      clientY: 390,
       pointerId: 1,
     });
     firePointerGestureEvent(plot, "pointerup", {
-      clientY: 180,
+      clientY: 390,
       pointerId: 1,
+    });
+
+    expect(screen.getByLabelText("Visible address range").textContent).toContain(
+      "0x20000",
+    );
+  });
+
+  it("zooms around the pointer anchor with the mouse wheel in hand mode", () => {
+    render(
+      <AddressSpaceMap
+        regions={[
+          region({
+            node_path: "/memory@0",
+            kind: "ram",
+            start: "0x0",
+            size: "0x100000",
+            end: "0xfffff",
+          }),
+        ]}
+      />,
+    );
+
+    const defaultMode = screen.getByRole("button", { name: "Default" });
+    const handMode = screen.getByRole("button", { name: "Hand" });
+
+    expect(defaultMode.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(handMode);
+
+    expect(handMode.getAttribute("aria-pressed")).toBe("true");
+
+    const plot = screen.getByLabelText("CPU Physical Address Space");
+    fireEvent.wheel(plot, {
+      clientY: 260,
+      deltaY: -120,
     });
 
     expect(screen.getByText("span 0x80000")).toBeTruthy();

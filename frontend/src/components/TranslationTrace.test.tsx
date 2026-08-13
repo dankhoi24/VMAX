@@ -73,7 +73,7 @@ describe("TranslationTrace", () => {
     expect(screen.getAllByText("0x1000").length).toBeGreaterThan(1);
   });
 
-  it("renders a direct CPU-visible resource when no bus steps exist", () => {
+  it("renders a no-translation note when no bus steps exist", () => {
     render(
       <TranslationTrace
         translation={translation({
@@ -85,7 +85,9 @@ describe("TranslationTrace", () => {
       />,
     );
 
-    expect(screen.getByText("cpu-visible")).toBeTruthy();
+    expect(screen.getByText("No address translation required")).toBeTruthy();
+    expect(screen.queryByText("cpu-visible")).toBeNull();
+    expect(screen.queryByText("ranges[0]")).toBeNull();
     expect(screen.getAllByText("0xfffffffffffff000").length).toBeGreaterThan(1);
   });
 

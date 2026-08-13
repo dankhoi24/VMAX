@@ -1003,10 +1003,6 @@ button {
   padding: 9px 10px;
 }
 
-.trace-step-card-direct {
-  background: #f7fbff;
-}
-
 .trace-step-header {
   align-items: center;
   display: flex;
@@ -1037,6 +1033,39 @@ button {
   color: var(--muted);
   font-size: 12px;
   text-align: center;
+}
+
+.trace-direct {
+  align-items: center;
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  min-height: 46px;
+}
+
+.trace-direct span {
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  justify-self: start;
+  padding: 5px 10px;
+}
+
+.trace-direct-rail {
+  align-self: stretch;
+  position: relative;
+}
+
+.trace-direct-rail::before {
+  background: var(--border-strong);
+  bottom: 0;
+  content: "";
+  left: 50%;
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  width: 1px;
 }
 
 .region-kind {

@@ -28,7 +28,7 @@ export function TranslationTrace({ translation }: TranslationTraceProps) {
       ))}
 
       {translation.translation_path.length === 0 && isResolved && (
-        <TraceDirectStep address={translation.bus_address} />
+        <TraceDirectNote />
       )}
 
       <TraceEndpoint
@@ -99,27 +99,11 @@ function TraceStep({ step, index }: TraceStepProps) {
   );
 }
 
-interface TraceDirectStepProps {
-  address: string;
-}
-
-function TraceDirectStep({ address }: TraceDirectStepProps) {
+function TraceDirectNote() {
   return (
-    <div className="trace-step">
-      <div className="trace-rail" aria-hidden="true">
-        <span>1</span>
-      </div>
-      <div className="trace-step-card trace-step-card-direct">
-        <div className="trace-step-header">
-          <code>/</code>
-          <span className="trace-mapping trace-mapping-identity">cpu-visible</span>
-        </div>
-        <div className="trace-address-pair">
-          <code>{address}</code>
-          <span aria-hidden="true">-&gt;</span>
-          <code>{address}</code>
-        </div>
-      </div>
+    <div className="trace-direct" aria-label="No address translation required">
+      <div className="trace-direct-rail" aria-hidden="true" />
+      <span>No address translation required</span>
     </div>
   );
 }

@@ -8,6 +8,26 @@ afterEach(() => {
   cleanup();
 });
 
+function firePointerGestureEvent(
+  element: Element,
+  type: "pointerdown" | "pointermove" | "pointerup",
+  options: { button?: number; clientY: number; pointerId?: number },
+) {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    button: options.button ?? 0,
+    buttons: type === "pointerup" ? 0 : 1,
+    cancelable: true,
+    clientY: options.clientY,
+  });
+
+  Object.defineProperty(event, "pointerId", {
+    value: options.pointerId ?? 1,
+  });
+
+  fireEvent(element, event);
+}
+
 describe("AddressSpaceMap", () => {
   it("sorts address regions with BigInt precision", () => {
     render(
@@ -151,6 +171,110 @@ describe("AddressSpaceMap", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Fit All" }));
     expect(screen.getByText("span 0x100000")).toBeTruthy();
+  });
+
+  it("does not zoom with the mouse wheel", () => {
+    render(
+      <AddressSpaceMap
+        regions={[
+          region({
+            node_path: "/memory@0",
+            kind: "ram",
+            start: "0x0",
+            size: "0x100000",
+            end: "0xfffff",
+          }),
+        ]}
+      />,
+    );
+
+    fireEvent.wheel(screen.getByLabelText("CPU Physical Address Space"), {
+      deltaY: -120,
+    });
+
+    expect(screen.getByText("span 0x100000")).toBeTruthy();
+  });
+
+  it("pans the viewport by dragging in pan mode", () => {
+    render(
+      <AddressSpaceMap
+        regions={[
+          region({
+            node_path: "/memory@0",
+            kind: "ram",
+            start: "0x0",
+            size: "0x100000",
+            end: "0xfffff",
+          }),
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+
+    const plot = screen.getByLabelText("CPU Physical Address Space");
+    firePointerGestureEvent(plot, "pointerdown", {
+      button: 0,
+      clientY: 260,
+      pointerId: 1,
+    });
+    firePointerGestureEvent(plot, "pointermove", {
+      clientY: 390,
+      pointerId: 1,
+    });
+    firePointerGestureEvent(plot, "pointerup", {
+      clientY: 390,
+      pointerId: 1,
+    });
+
+    expect(screen.getByLabelText("Visible address range").textContent).toContain(
+      "0x20000",
+    );
+  });
+
+  it("zooms around the pointer anchor by dragging upward in zoom mode", () => {
+    render(
+      <AddressSpaceMap
+        regions={[
+          region({
+            node_path: "/memory@0",
+            kind: "ram",
+            start: "0x0",
+            size: "0x100000",
+            end: "0xfffff",
+          }),
+        ]}
+      />,
+    );
+
+    const panMode = screen.getByRole("button", { name: "Pan" });
+    const zoomMode = screen.getByRole("button", { name: "Zoom" });
+
+    expect(panMode.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(zoomMode);
+
+    expect(zoomMode.getAttribute("aria-pressed")).toBe("true");
+
+    const plot = screen.getByLabelText("CPU Physical Address Space");
+    firePointerGestureEvent(plot, "pointerdown", {
+      button: 0,
+      clientY: 260,
+      pointerId: 1,
+    });
+    firePointerGestureEvent(plot, "pointermove", {
+      clientY: 180,
+      pointerId: 1,
+    });
+    firePointerGestureEvent(plot, "pointerup", {
+      clientY: 180,
+      pointerId: 1,
+    });
+
+    expect(screen.getByText("span 0x80000")).toBeTruthy();
+    expect(screen.getByLabelText("Visible address range").textContent).toContain(
+      "0x40000",
+    );
   });
 
   it("selects a Device Tree node when a region is clicked", () => {

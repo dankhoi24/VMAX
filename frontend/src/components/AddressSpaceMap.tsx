@@ -5,6 +5,7 @@ import type { MemoryRegion } from "../models/addressing";
 type RegionRelation = "normal" | "nested" | "overlap";
 type RegionDisplayMode = "full" | "compact" | "marker";
 type GapDisplayMode = "full" | "compact" | "marker";
+type InteractionMode = "pan" | "zoom";
 
 type NormalizedRegion =
   | {
@@ -31,6 +32,15 @@ interface AddressSpaceRange {
 interface ViewportState {
   start: bigint;
   span: bigint;
+}
+
+interface PointerGesture {
+  pointerId: number;
+  startY: number;
+  initialViewportStart: bigint;
+  initialViewportSpan: bigint;
+  anchorAddress: bigint;
+  anchorPixelY: number;
 }
 
 export interface AddressSpaceRegionEntry {
@@ -102,6 +112,7 @@ const REGION_FULL_HEIGHT = 32;
 const GAP_COMPACT_HEIGHT = 4;
 const GAP_FULL_HEIGHT = 24;
 const CLUSTER_DISTANCE = 14;
+const ZOOM_DRAG_STEP_PIXELS = 80;
 const PLOT_HEIGHT = 520;
 const PLOT_HEIGHT_BIGINT = BigInt(PLOT_HEIGHT);
 
@@ -131,12 +142,10 @@ export function AddressSpaceMap({
   const [selectedResourceIndex, setSelectedResourceIndex] = useState<
     number | null
   >(null);
+  const [interactionMode, setInteractionMode] =
+    useState<InteractionMode>("pan");
   const [viewportState, setViewportState] = useState<ViewportState | null>(null);
-  const [drag, setDrag] = useState<{
-    pointerId: number;
-    startY: number;
-    viewportStart: bigint;
-  } | null>(null);
+  const [drag, setDrag] = useState<PointerGesture | null>(null);
   const viewport = clampViewport(
     model.range,
     viewportState ?? getFullViewport(model.range),
@@ -230,17 +239,22 @@ export function AddressSpaceMap({
     );
   }
 
-  function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
-    event.preventDefault();
-    zoomBy(event.deltaY > 0 ? -2n : 2n);
-  }
-
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (event.button > 0) {
+      return;
+    }
+
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    const anchorPixelY = getPointerPixelY(event);
+    const pointerClientY = getPointerClientY(event, anchorPixelY);
+
     setDrag({
+      anchorAddress: getAddressAtPixel(anchorPixelY, viewport),
+      anchorPixelY,
+      initialViewportSpan: viewport.span,
+      initialViewportStart: viewport.start,
       pointerId: event.pointerId,
-      startY: event.clientY,
-      viewportStart: viewport.start,
+      startY: pointerClientY,
     });
   }
 
@@ -249,19 +263,38 @@ export function AddressSpaceMap({
       return;
     }
 
-    const deltaPixels = Math.round(event.clientY - drag.startY);
-    const deltaAddress = (BigInt(deltaPixels) * viewport.span) / PLOT_HEIGHT_BIGINT;
+    const deltaPixels = Math.round(
+      getPointerClientY(event, drag.startY) - drag.startY,
+    );
+
+    if (interactionMode === "zoom") {
+      setViewportState(
+        getAnchoredViewport(
+          model.range,
+          drag.anchorAddress,
+          drag.anchorPixelY,
+          getDragZoomSpan(drag.initialViewportSpan, deltaPixels),
+        ),
+      );
+      return;
+    }
+
+    const deltaAddress =
+      (BigInt(deltaPixels) * drag.initialViewportSpan) / PLOT_HEIGHT_BIGINT;
 
     setViewportState(
       clampViewport(model.range, {
-        start: drag.viewportStart - deltaAddress,
-        span: viewport.span,
+        start: drag.initialViewportStart - deltaAddress,
+        span: drag.initialViewportSpan,
       }),
     );
   }
 
   function handlePointerEnd(event: React.PointerEvent<HTMLDivElement>) {
     if (drag?.pointerId === event.pointerId) {
+      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+      }
       setDrag(null);
     }
   }
@@ -287,23 +320,61 @@ export function AddressSpaceMap({
     }),
   );
   const tickAddresses = getTickAddresses(viewport);
+  const plotClassName = [
+    "address-space-plot",
+    `address-space-plot-${interactionMode}`,
+    drag ? `address-space-plot-${interactionMode}-dragging` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className="address-space-map">
       <div className="address-space-toolbar" aria-label="Address space controls">
-        <button type="button" onClick={() => zoomBy(-2n)}>
-          -
-        </button>
-        <span>{formatSpan(viewport.span)}</span>
-        <button type="button" onClick={() => zoomBy(2n)}>
-          +
-        </button>
-        <button type="button" onClick={fitAll}>
-          Fit All
-        </button>
-        <button type="button" onClick={fitSelected} disabled={!selectedRange}>
-          Fit Selected
-        </button>
+        <div className="address-space-tool-group" aria-label="Interaction mode">
+          <span className="address-space-toolbar-label">Interaction</span>
+          <button
+            className={
+              interactionMode === "pan"
+                ? "address-space-mode-button address-space-mode-button-active"
+                : "address-space-mode-button"
+            }
+            type="button"
+            aria-pressed={interactionMode === "pan"}
+            onClick={() => setInteractionMode("pan")}
+          >
+            Pan
+          </button>
+          <button
+            className={
+              interactionMode === "zoom"
+                ? "address-space-mode-button address-space-mode-button-active"
+                : "address-space-mode-button"
+            }
+            type="button"
+            aria-pressed={interactionMode === "zoom"}
+            onClick={() => setInteractionMode("zoom")}
+          >
+            Zoom
+          </button>
+        </div>
+        <div className="address-space-tool-group" aria-label="Viewport controls">
+          <button type="button" onClick={() => zoomBy(-2n)}>
+            -
+          </button>
+          <span className="address-space-span-chip">
+            {formatSpan(viewport.span)}
+          </span>
+          <button type="button" onClick={() => zoomBy(2n)}>
+            +
+          </button>
+          <button type="button" onClick={fitAll}>
+            Fit All
+          </button>
+          <button type="button" onClick={fitSelected} disabled={!selectedRange}>
+            Fit Selected
+          </button>
+        </div>
       </div>
 
       {selectedRegions.length > 1 && (
@@ -355,9 +426,8 @@ export function AddressSpaceMap({
           </div>
 
           <div
-            className={drag ? "address-space-plot address-space-plot-dragging" : "address-space-plot"}
+            className={plotClassName}
             aria-label="CPU Physical Address Space"
-            onWheel={handleWheel}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerEnd}
@@ -857,6 +927,37 @@ function getCenteredViewport(
   });
 }
 
+function getAnchoredViewport(
+  fullRange: AddressSpaceRange,
+  anchorAddress: bigint,
+  anchorPixelY: number,
+  requestedSpan: bigint,
+): ViewportState {
+  const pixel = BigInt(clampPixel(Math.round(anchorPixelY), 0, PLOT_HEIGHT));
+  const span =
+    requestedSpan < 1n
+      ? 1n
+      : requestedSpan > fullRange.span
+        ? fullRange.span
+        : requestedSpan;
+
+  return clampViewport(fullRange, {
+    start: anchorAddress - (span * pixel) / PLOT_HEIGHT_BIGINT,
+    span,
+  });
+}
+
+function getDragZoomSpan(initialSpan: bigint, deltaPixels: number): bigint {
+  const steps = Math.trunc(Math.abs(deltaPixels) / ZOOM_DRAG_STEP_PIXELS);
+
+  if (steps === 0) {
+    return initialSpan;
+  }
+
+  const factor = 1n << BigInt(steps);
+  return deltaPixels < 0 ? ceilDiv(initialSpan, factor) : initialSpan * factor;
+}
+
 function clampViewport(
   fullRange: AddressSpaceRange,
   viewport: ViewportState,
@@ -1062,6 +1163,44 @@ function getAddressY(address: bigint, viewport: AddressSpaceRange): number {
   return Number(
     ((address - viewport.start) * PLOT_HEIGHT_BIGINT) / viewport.span,
   );
+}
+
+function getAddressAtPixel(pixelY: number, viewport: AddressSpaceRange): bigint {
+  if (pixelY <= 0) {
+    return viewport.start;
+  }
+
+  if (pixelY >= PLOT_HEIGHT) {
+    return viewport.end;
+  }
+
+  return (
+    viewport.start +
+    (viewport.span * BigInt(clampPlotPixel(pixelY))) / PLOT_HEIGHT_BIGINT
+  );
+}
+
+function getPointerPixelY(event: React.PointerEvent<HTMLDivElement>): number {
+  const rect = event.currentTarget.getBoundingClientRect();
+  const rectTop = Number.isFinite(rect.top) ? rect.top : 0;
+  const clientY = getPointerClientY(event, rectTop + PLOT_HEIGHT / 2);
+
+  return clampPlotPixel(clientY - rectTop);
+}
+
+function getPointerClientY(
+  event: React.PointerEvent<HTMLDivElement>,
+  fallback: number,
+): number {
+  return Number.isFinite(event.clientY) ? event.clientY : fallback;
+}
+
+function clampPlotPixel(value: number): number {
+  if (!Number.isFinite(value)) {
+    return Math.floor(PLOT_HEIGHT / 2);
+  }
+
+  return Math.round(clampPixel(value, 0, PLOT_HEIGHT));
 }
 
 function getTickAddresses(viewport: AddressSpaceRange): bigint[] {

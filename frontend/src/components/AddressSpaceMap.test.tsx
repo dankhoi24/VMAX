@@ -65,7 +65,7 @@ describe("AddressSpaceMap", () => {
     expect(regionButtons[1].textContent).toContain("0x1000000000000001");
   });
 
-  it("renders meaningful gaps plus nested and overlapping regions", () => {
+  it("renders meaningful gaps plus nested and overlapping region metadata", () => {
     render(
       <AddressSpaceMap
         regions={[
@@ -102,14 +102,20 @@ describe("AddressSpaceMap", () => {
     );
 
     expect(screen.getByLabelText("CPU Physical Address Space")).toBeTruthy();
-    expect(screen.getByText("nested")).toBeTruthy();
-    expect(screen.getByText("overlap")).toBeTruthy();
     expect(screen.getByText("0x500 - 0x7ff")).toBeTruthy();
-    expect(
-      screen.getByRole("button", {
-        name: "Select address region /soc/dma@300",
-      }).textContent,
-    ).toContain("0x300");
+    expect(screen.queryByText("nested")).toBeNull();
+    expect(screen.queryByText("overlap")).toBeNull();
+
+    const reserved = screen.getByRole("button", {
+      name: "Select address region /reserved-memory/framebuffer@100",
+    });
+    const dma = screen.getByRole("button", {
+      name: "Select address region /soc/dma@300",
+    });
+
+    expect(reserved.getAttribute("title")).toContain("Relationship: nested");
+    expect(dma.getAttribute("title")).toContain("Relationship: overlap");
+    expect(dma.textContent).toContain("0x300");
   });
 
   it("renders region height proportionally to physical size", () => {
@@ -173,7 +179,7 @@ describe("AddressSpaceMap", () => {
     expect(screen.getByText("span 0x100000")).toBeTruthy();
   });
 
-  it("does not zoom with the mouse wheel in default mode", () => {
+  it("pans with the mouse wheel in default mode", () => {
     render(
       <AddressSpaceMap
         regions={[
@@ -194,12 +200,17 @@ describe("AddressSpaceMap", () => {
       ),
     ).toBe("true");
 
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+
     fireEvent.wheel(screen.getByLabelText("CPU Physical Address Space"), {
-      deltaY: -120,
+      deltaY: 130,
       clientY: 260,
     });
 
-    expect(screen.getByText("span 0x100000")).toBeTruthy();
+    expect(screen.getByText("span 0x80000")).toBeTruthy();
+    expect(screen.getByLabelText("Visible address range").textContent).toContain(
+      "0x60000",
+    );
   });
 
   it("does not pan the viewport by dragging in default mode", () => {
@@ -380,6 +391,34 @@ describe("AddressSpaceMap", () => {
     expect(tiny.querySelector(".address-space-region-callout")).toBeTruthy();
     expect(large.className).toContain("address-space-region-hitbox-full");
     expect(large.querySelector(".address-space-region-label code")).toBeTruthy();
+  });
+
+  it("uses line-only markers for tiny gaps", () => {
+    const { container } = render(
+      <AddressSpaceMap
+        regions={[
+          region({
+            node_path: "/left@0",
+            kind: "device",
+            start: "0x0",
+            size: "0x1000",
+            end: "0xfff",
+          }),
+          region({
+            node_path: "/right@1010",
+            kind: "device",
+            start: "0x1010",
+            size: "0x200000",
+            end: "0x200fff",
+          }),
+        ]}
+      />,
+    );
+
+    const tinyGap = container.querySelector(".address-space-gap-band-marker");
+
+    expect(tinyGap).toBeTruthy();
+    expect(tinyGap?.textContent).toBe("");
   });
 
   it("clusters dense marker regions and zooms into the cluster", () => {

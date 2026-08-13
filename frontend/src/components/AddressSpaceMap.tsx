@@ -108,8 +108,8 @@ const HITBOX_HEIGHT = 14;
 const MIN_VISUAL_HEIGHT = 1;
 const REGION_COMPACT_HEIGHT = 8;
 const REGION_FULL_HEIGHT = 32;
-const GAP_COMPACT_HEIGHT = 4;
-const GAP_FULL_HEIGHT = 24;
+const GAP_COMPACT_HEIGHT = 10;
+const GAP_FULL_HEIGHT = 40;
 const CLUSTER_DISTANCE = 14;
 const PLOT_HEIGHT = 520;
 const PLOT_HEIGHT_BIGINT = BigInt(PLOT_HEIGHT);
@@ -267,11 +267,13 @@ export function AddressSpaceMap({
   }
 
   function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
+    event.preventDefault();
+
     if (interactionMode !== "hand") {
+      scrollViewport(event.deltaY);
       return;
     }
 
-    event.preventDefault();
     const anchorPixelY = getWheelPixelY(event);
     const anchorAddress = getAddressAtPixel(anchorPixelY, viewport);
     const nextSpan =
@@ -279,6 +281,24 @@ export function AddressSpaceMap({
 
     setViewportState(
       getAnchoredViewport(model.range, anchorAddress, anchorPixelY, nextSpan),
+    );
+  }
+
+  function scrollViewport(deltaY: number) {
+    const pixels = Math.trunc(deltaY);
+
+    if (pixels === 0) {
+      return;
+    }
+
+    const deltaAddress =
+      (viewport.span * BigInt(pixels)) / PLOT_HEIGHT_BIGINT;
+
+    setViewportState(
+      clampViewport(model.range, {
+        start: viewport.start + deltaAddress,
+        span: viewport.span,
+      }),
     );
   }
 
@@ -521,6 +541,8 @@ function AddressSpaceRegion({
   onSelectRegion?: (nodePath: string) => void;
 }) {
   const { bounds, displayMode, entry, isSelected, laneIndex } = item;
+  const relationshipText =
+    entry.relation === "normal" ? null : `Relationship: ${entry.relation}`;
   const className = [
     "address-space-region-hitbox",
     `address-space-region-hitbox-${entry.region.kind}`,
@@ -547,7 +569,13 @@ function AddressSpaceRegion({
         onSelectRegion?.(entry.region.node_path);
       }}
       aria-label={`Select address region ${entry.region.node_path}`}
-      title={`${entry.region.node_path}\n${entry.region.start} - ${entry.region.end ?? "unknown"}`}
+      title={[
+        entry.region.node_path,
+        `${entry.region.start} - ${entry.region.end ?? "unknown"}`,
+        relationshipText,
+      ]
+        .filter(Boolean)
+        .join("\n")}
     >
       <span
         className={[
@@ -562,9 +590,7 @@ function AddressSpaceRegion({
       />
       {displayMode !== "marker" && (
         <span className="address-space-region-label">
-          <strong>{REGION_LABELS[entry.region.kind]}</strong>
-          {displayMode === "full" && <code>{entry.region.node_path}</code>}
-          {entry.relation !== "normal" && <em>{entry.relation}</em>}
+          <code>{entry.region.node_path}</code>
         </span>
       )}
       {displayMode === "full" && (
@@ -579,6 +605,7 @@ function AddressSpaceRegion({
             {entry.region.start} - {entry.region.end ?? "-"}
           </code>
           <span>Size: {entry.region.size ?? "-"}</span>
+          {relationshipText && <span>{relationshipText}</span>}
         </span>
       )}
     </button>
@@ -610,7 +637,7 @@ function AddressSpaceCluster({
       aria-label={`Zoom into ${cluster.count} address regions`}
       title={`${cluster.count} regions\n${formatHex(cluster.range.start)} - ${formatHex(cluster.range.end)}`}
     >
-      +{cluster.count}
+      <span className="address-space-cluster-count">+{cluster.count}</span>
     </button>
   );
 }

@@ -1018,16 +1018,18 @@ button {
 
 .address-space-gap-band {
   align-items: center;
-  background: rgba(243, 246, 249, 0.76);
-  border: 1px dashed var(--border-strong);
-  border-radius: 7px;
+  background: transparent;
+  border: 0;
+  border-top: 1px dashed rgba(148, 163, 184, 0.58);
+  border-radius: 0;
   color: var(--muted);
   display: flex;
   gap: 8px;
+  justify-content: center;
   left: 10px;
   min-height: 1px;
   overflow: hidden;
-  padding: 0 8px;
+  padding: 0;
   pointer-events: none;
   position: absolute;
   right: 10px;
@@ -1044,15 +1046,19 @@ button {
   opacity: 0.78;
 }
 
-.address-space-gap-band-marker {
-  border-left: 0;
-  border-right: 0;
-  border-radius: 0;
-  padding: 0;
+.address-space-gap-band-full {
+  background: rgba(248, 250, 252, 0.72);
+  border: 1px dashed rgba(148, 163, 184, 0.7);
+  border-radius: 7px;
+  padding: 0 8px;
 }
 
 .address-space-gap-band-compact {
-  justify-content: center;
+  opacity: 0.72;
+}
+
+.address-space-gap-band-marker {
+  opacity: 0.48;
 }
 
 .address-space-region-hitbox {
@@ -1126,14 +1132,6 @@ button {
   top: 0;
 }
 
-.address-space-region-label strong,
-.address-space-region-label em {
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
 .address-space-region-label code,
 .address-space-region-hitbox small {
   overflow: hidden;
@@ -1160,6 +1158,11 @@ button {
   left: 6px;
   max-width: calc(100% - 12px);
   position: absolute;
+}
+
+.address-space-region-label code {
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .address-space-region-hitbox-compact .address-space-region-label {
@@ -1211,23 +1214,63 @@ button {
 
 .address-space-cluster {
   align-items: center;
-  background: rgba(23, 63, 112, 0.88);
-  border: 1px solid rgba(23, 63, 112, 0.18);
-  border-radius: 999px;
-  color: #ffffff;
+  background: transparent;
+  border: 0;
+  color: var(--accent-strong);
   cursor: pointer;
-  display: inline-flex;
+  display: block;
   font-size: 11px;
   font-weight: 800;
-  justify-content: center;
   min-height: 14px;
-  padding: 0 6px;
+  padding: 0;
   position: absolute;
   z-index: 8;
 }
 
+.address-space-cluster::before {
+  border-top: 1px solid rgba(37, 99, 166, 0.48);
+  content: "";
+  left: 0;
+  position: absolute;
+  right: 32px;
+  top: 50%;
+}
+
+.address-space-cluster::after {
+  background: var(--accent);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(37, 99, 166, 0.18);
+  content: "";
+  height: 5px;
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+}
+
 .address-space-cluster:hover {
-  background: var(--accent-strong);
+  background: transparent;
+}
+
+.address-space-cluster-count {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(37, 99, 166, 0.32);
+  border-radius: 999px;
+  box-shadow: 0 4px 10px rgba(37, 99, 166, 0.08);
+  color: var(--accent-strong);
+  line-height: 1;
+  padding: 3px 6px;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.address-space-cluster:hover .address-space-cluster-count {
+  background: var(--accent-soft);
+  border-color: var(--border-strong);
 }
 
 .address-space-unknown {

@@ -357,6 +357,54 @@ describe("AddressSpaceMap", () => {
     ).toContain("address-space-region-hitbox-selected");
   });
 
+  it("refocuses the same selected node when focusRequest changes", () => {
+    const regions = [
+      region({
+        node_path: "/memory@0",
+        kind: "ram",
+        start: "0x0",
+        size: "0x100000",
+        end: "0xfffff",
+      }),
+      region({
+        node_path: "/soc/uart@100000",
+        kind: "device",
+        start: "0x100000",
+        size: "0x100",
+        end: "0x1000ff",
+      }),
+    ];
+    const { rerender } = render(
+      <AddressSpaceMap
+        regions={regions}
+        selectedNodePath="/soc/uart@100000"
+        focusRequest={1}
+      />,
+    );
+
+    expect(screen.getByLabelText("Visible address range").textContent).toContain(
+      "0xffb00",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Fit All" }));
+
+    expect(screen.getByLabelText("Visible address range").textContent).toContain(
+      "0x0",
+    );
+
+    rerender(
+      <AddressSpaceMap
+        regions={regions}
+        selectedNodePath="/soc/uart@100000"
+        focusRequest={2}
+      />,
+    );
+
+    expect(screen.getByLabelText("Visible address range").textContent).toContain(
+      "0xffb00",
+    );
+  });
+
   it("uses level-of-detail modes for dense labels", () => {
     render(
       <AddressSpaceMap
@@ -421,7 +469,7 @@ describe("AddressSpaceMap", () => {
     expect(tinyGap?.textContent).toBe("");
   });
 
-  it("clusters dense marker regions and zooms into the cluster", () => {
+  it("clusters dense marker regions and drills into the cluster", () => {
     render(
       <AddressSpaceMap
         regions={[
@@ -465,11 +513,71 @@ describe("AddressSpaceMap", () => {
 
     fireEvent.click(cluster);
 
-    expect(
-      screen.queryByRole("button", {
+    expect(screen.getByText("span 0x40400")).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", {
         name: "Zoom into 3 address regions",
       }),
-    ).toBeNull();
+    );
+
+    expect(screen.getByText("span 0x10100")).toBeTruthy();
+  });
+
+  it("expands inseparable clusters into selectable members", () => {
+    const onSelectRegion = vi.fn();
+
+    render(
+      <AddressSpaceMap
+        regions={[
+          region({
+            node_path: "/soc/foo@1000",
+            kind: "device",
+            start: "0x1000",
+            size: "0x1",
+            end: "0x1000",
+          }),
+          region({
+            node_path: "/soc/bar@1000",
+            kind: "device",
+            start: "0x1000",
+            size: "0x1",
+            end: "0x1000",
+          }),
+          region({
+            node_path: "/soc/baz@1000",
+            kind: "device",
+            start: "0x1000",
+            size: "0x1",
+            end: "0x1000",
+          }),
+          region({
+            node_path: "/memory@100000",
+            kind: "ram",
+            start: "0x100000",
+            size: "0x1000",
+            end: "0x100fff",
+          }),
+        ]}
+        onSelectRegion={onSelectRegion}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Zoom into 3 address regions",
+      }),
+    );
+
+    expect(
+      screen.getByRole("group", {
+        name: "3 clustered address regions",
+      }),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /\/soc\/bar@1000/ }));
+
+    expect(onSelectRegion).toHaveBeenCalledWith("/soc/bar@1000");
   });
 
   it("shows selected resource focus controls for multi-region nodes", () => {

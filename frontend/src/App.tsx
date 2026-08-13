@@ -168,6 +168,7 @@ export function App() {
           <PropertyPanel
             node={selectedNode}
             addressingState={addressingState}
+            addressSpaceFocusRequest={selectionRequest}
             onActiveTabChange={setInspectorTab}
             onSelectNodePath={selectNodePath}
           />

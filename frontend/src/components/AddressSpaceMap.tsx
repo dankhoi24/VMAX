@@ -80,6 +80,7 @@ interface RegionRenderItem {
 interface RegionCluster {
   entryKind: "cluster";
   count: number;
+  items: RegionRenderItem[];
   laneIndex: number;
   range: AddressSpaceRange;
   top: number;
@@ -100,6 +101,7 @@ interface VisibleBounds {
 interface AddressSpaceMapProps {
   regions: MemoryRegion[];
   selectedNodePath?: string | null;
+  focusRequest?: number;
   onSelectRegion?: (nodePath: string) => void;
 }
 
@@ -123,6 +125,7 @@ const REGION_LABELS: Record<MemoryRegion["kind"], string> = {
 export function AddressSpaceMap({
   regions,
   selectedNodePath = null,
+  focusRequest = 0,
   onSelectRegion,
 }: AddressSpaceMapProps) {
   const model = useMemo(() => buildAddressSpaceModel(regions), [regions]);
@@ -144,6 +147,9 @@ export function AddressSpaceMap({
     useState<InteractionMode>("default");
   const [viewportState, setViewportState] = useState<ViewportState | null>(null);
   const [drag, setDrag] = useState<PointerGesture | null>(null);
+  const [expandedClusterKey, setExpandedClusterKey] = useState<string | null>(
+    null,
+  );
   const viewport = clampViewport(
     model.range,
     viewportState ?? getFullViewport(model.range),
@@ -157,6 +163,7 @@ export function AddressSpaceMap({
   );
 
   useEffect(() => {
+    setExpandedClusterKey(null);
     setViewportState(getFullViewport(model.range));
   }, [model.range.start, model.range.end]);
 
@@ -166,9 +173,10 @@ export function AddressSpaceMap({
 
   useEffect(() => {
     if (selectedFocusRange) {
+      setExpandedClusterKey(null);
       setViewportState(fitRangeViewport(model.range, selectedFocusRange));
     }
-  }, [model.range, selectedFocusRange]);
+  }, [focusRequest, model.range, selectedFocusRange]);
 
   if (model.regions.length === 0 && model.unknowns.length === 0) {
     return (
@@ -179,11 +187,13 @@ export function AddressSpaceMap({
   }
 
   function fitAll() {
+    setExpandedClusterKey(null);
     setViewportState(getFullViewport(model.range));
   }
 
   function fitSelected() {
     if (selectedFocusRange) {
+      setExpandedClusterKey(null);
       setViewportState(fitRangeViewport(model.range, selectedFocusRange));
     }
   }
@@ -191,6 +201,7 @@ export function AddressSpaceMap({
   function fitSelectedNode() {
     if (selectedRange) {
       setSelectedResourceIndex(null);
+      setExpandedClusterKey(null);
       setViewportState(fitRangeViewport(model.range, selectedRange));
     }
   }
@@ -200,12 +211,24 @@ export function AddressSpaceMap({
 
     if (region) {
       setSelectedResourceIndex(index);
+      setExpandedClusterKey(null);
       setViewportState(fitRangeViewport(model.range, entryToRange(region)));
     }
   }
 
-  function fitCluster(range: AddressSpaceRange) {
-    setViewportState(fitRangeViewport(model.range, range));
+  function fitCluster(cluster: RegionCluster) {
+    if (isInseparableCluster(cluster)) {
+      const clusterKey = getClusterKey(cluster);
+      setExpandedClusterKey((current) =>
+        current === clusterKey ? null : clusterKey,
+      );
+      return;
+    }
+
+    setExpandedClusterKey(null);
+    setViewportState(
+      zoomIntoClusterViewport(model.range, viewport, cluster.range),
+    );
   }
 
   function zoomBy(factor: bigint) {
@@ -215,6 +238,7 @@ export function AddressSpaceMap({
         ? viewport.span * -factor
         : ceilDiv(viewport.span, factor);
 
+    setExpandedClusterKey(null);
     setViewportState(getCenteredViewport(model.range, center, nextSpan));
   }
 
@@ -249,6 +273,7 @@ export function AddressSpaceMap({
     const deltaAddress =
       (BigInt(deltaPixels) * drag.initialViewportSpan) / PLOT_HEIGHT_BIGINT;
 
+    setExpandedClusterKey(null);
     setViewportState(
       clampViewport(model.range, {
         start: drag.initialViewportStart - deltaAddress,
@@ -279,6 +304,7 @@ export function AddressSpaceMap({
     const nextSpan =
       event.deltaY > 0 ? viewport.span * 2n : ceilDiv(viewport.span, 2n);
 
+    setExpandedClusterKey(null);
     setViewportState(
       getAnchoredViewport(model.range, anchorAddress, anchorPixelY, nextSpan),
     );
@@ -294,6 +320,7 @@ export function AddressSpaceMap({
     const deltaAddress =
       (viewport.span * BigInt(pixels)) / PLOT_HEIGHT_BIGINT;
 
+    setExpandedClusterKey(null);
     setViewportState(
       clampViewport(model.range, {
         start: viewport.start + deltaAddress,
@@ -481,7 +508,12 @@ export function AddressSpaceMap({
                   <AddressSpaceCluster
                     cluster={group}
                     key={`cluster:${group.laneIndex}:${group.range.start}:${index}`}
+                    isExpanded={expandedClusterKey === getClusterKey(group)}
                     onFitCluster={fitCluster}
+                    onSelectRegion={(nodePath) => {
+                      setExpandedClusterKey(null);
+                      onSelectRegion?.(nodePath);
+                    }}
                   />
                 ) : (
                   <AddressSpaceRegion
@@ -614,31 +646,79 @@ function AddressSpaceRegion({
 
 function AddressSpaceCluster({
   cluster,
+  isExpanded,
   onFitCluster,
+  onSelectRegion,
 }: {
   cluster: RegionCluster;
-  onFitCluster: (range: AddressSpaceRange) => void;
+  isExpanded: boolean;
+  onFitCluster: (cluster: RegionCluster) => void;
+  onSelectRegion?: (nodePath: string) => void;
 }) {
   return (
-    <button
-      className="address-space-cluster"
-      type="button"
-      style={{
-        height: `${cluster.height}px`,
-        left: getLaneLeft(cluster.laneIndex),
-        top: `${cluster.top}px`,
-        width: "calc(33.333333% - 4px)",
-      }}
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => {
-        event.stopPropagation();
-        onFitCluster(cluster.range);
-      }}
-      aria-label={`Zoom into ${cluster.count} address regions`}
-      title={`${cluster.count} regions\n${formatHex(cluster.range.start)} - ${formatHex(cluster.range.end)}`}
-    >
-      <span className="address-space-cluster-count">+{cluster.count}</span>
-    </button>
+    <>
+      <button
+        className={
+          isExpanded
+            ? "address-space-cluster address-space-cluster-expanded"
+            : "address-space-cluster"
+        }
+        type="button"
+        style={{
+          height: `${cluster.height}px`,
+          left: getLaneLeft(cluster.laneIndex),
+          top: `${cluster.top}px`,
+          width: "calc(33.333333% - 4px)",
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onFitCluster(cluster);
+        }}
+        aria-label={`Zoom into ${cluster.count} address regions`}
+        title={`${cluster.count} regions\n${formatHex(cluster.range.start)} - ${formatHex(cluster.range.end)}`}
+      >
+        <span className="address-space-cluster-count">+{cluster.count}</span>
+      </button>
+      {isExpanded && (
+        <div
+          className="address-space-cluster-popover"
+          style={{
+            left: getLaneLeft(cluster.laneIndex),
+            top: `${getClusterPopoverTop(cluster)}px`,
+            width: "calc(33.333333% - 4px)",
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          role="group"
+          aria-label={`${cluster.count} clustered address regions`}
+        >
+          <strong>{cluster.count} regions</strong>
+          <code>
+            {formatHex(cluster.range.start)} - {formatHex(cluster.range.end)}
+          </code>
+          <ul>
+            {cluster.items.map((item, index) => (
+              <li
+                key={`${item.entry.region.node_path}:${item.entry.region.start}:${index}`}
+              >
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelectRegion?.(item.entry.region.node_path);
+                  }}
+                >
+                  <span>{item.entry.region.node_path}</span>
+                  <code>
+                    {item.entry.region.start} - {item.entry.region.end ?? "-"}
+                  </code>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -911,6 +991,25 @@ function fitRangeViewport(
   return getCenteredViewport(fullRange, center, span);
 }
 
+function zoomIntoClusterViewport(
+  fullRange: AddressSpaceRange,
+  viewport: AddressSpaceRange,
+  clusterRange: AddressSpaceRange,
+): ViewportState {
+  const quarterViewport = viewport.span > 4n ? viewport.span / 4n : 1n;
+  const minimumSpan = clusterRange.span > 1n ? clusterRange.span * 2n : 1n;
+  let nextSpan =
+    quarterViewport > minimumSpan ? quarterViewport : minimumSpan;
+
+  if (nextSpan >= viewport.span) {
+    nextSpan = viewport.span > 1n ? ceilDiv(viewport.span, 2n) : 1n;
+  }
+
+  const center = clusterRange.start + clusterRange.span / 2n;
+
+  return getCenteredViewport(fullRange, center, nextSpan);
+}
+
 function getCenteredViewport(
   fullRange: AddressSpaceRange,
   center: bigint,
@@ -1054,6 +1153,7 @@ function buildCluster(
     count: items.length,
     entryKind: "cluster",
     height: Math.max(HITBOX_HEIGHT, bottom - top),
+    items,
     laneIndex,
     range: {
       start,
@@ -1062,6 +1162,27 @@ function buildCluster(
     },
     top,
   };
+}
+
+function isInseparableCluster(cluster: RegionCluster): boolean {
+  return cluster.items.every(
+    (item) =>
+      item.entry.start === cluster.items[0].entry.start &&
+      item.entry.end === cluster.items[0].entry.end,
+  );
+}
+
+function getClusterKey(cluster: RegionCluster): string {
+  return [
+    cluster.laneIndex,
+    cluster.range.start.toString(),
+    cluster.range.end.toString(),
+    cluster.items.map((item) => item.entry.region.node_path).join("|"),
+  ].join(":");
+}
+
+function getClusterPopoverTop(cluster: RegionCluster): number {
+  return clampPixel(cluster.top + cluster.height + 6, 0, PLOT_HEIGHT - 120);
 }
 
 function getClusterBottom(items: RegionRenderItem[]): number {

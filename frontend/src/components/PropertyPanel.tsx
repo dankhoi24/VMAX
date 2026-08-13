@@ -21,6 +21,7 @@ import {
 interface PropertyPanelProps {
   node: DeviceTreeNode | null;
   addressingState?: AddressingPanelState;
+  addressSpaceFocusRequest?: number;
   onActiveTabChange?: (tab: InspectorTab) => void;
   onSelectNodePath?: (nodePath: string) => void;
 }
@@ -32,6 +33,7 @@ const defaultAddressingState: AddressingPanelState = { status: "idle" };
 export function PropertyPanel({
   node,
   addressingState = defaultAddressingState,
+  addressSpaceFocusRequest = 0,
   onActiveTabChange,
   onSelectNodePath,
 }: PropertyPanelProps) {
@@ -99,6 +101,7 @@ export function PropertyPanel({
         <AddressSpaceContent
           selectedNodePath={node.path}
           state={addressingState}
+          focusRequest={addressSpaceFocusRequest}
           onSelectNodePath={onSelectNodePath}
         />
       )}
@@ -109,12 +112,14 @@ export function PropertyPanel({
 interface AddressSpaceContentProps {
   selectedNodePath: string;
   state: AddressingPanelState;
+  focusRequest: number;
   onSelectNodePath?: (nodePath: string) => void;
 }
 
 function AddressSpaceContent({
   selectedNodePath,
   state,
+  focusRequest,
   onSelectNodePath,
 }: AddressSpaceContentProps) {
   if (state.status === "loading") {
@@ -158,6 +163,7 @@ function AddressSpaceContent({
       <AddressSpaceMap
         regions={state.report.regions}
         selectedNodePath={selectedNodePath}
+        focusRequest={focusRequest}
         onSelectRegion={onSelectNodePath}
       />
     </section>

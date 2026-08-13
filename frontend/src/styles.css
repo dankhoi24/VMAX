@@ -1273,6 +1273,80 @@ button {
   border-color: var(--border-strong);
 }
 
+.address-space-cluster-expanded .address-space-cluster-count {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.address-space-cluster-popover {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 6px;
+  max-height: 168px;
+  min-width: 220px;
+  overflow: auto;
+  padding: 8px;
+  position: absolute;
+  z-index: 14;
+}
+
+.address-space-cluster-popover strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.address-space-cluster-popover > code {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.address-space-cluster-popover ul {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.address-space-cluster-popover button {
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 5px 6px;
+  text-align: left;
+  width: 100%;
+}
+
+.address-space-cluster-popover button:hover {
+  background: var(--accent-wash);
+  border-color: var(--border-strong);
+}
+
+.address-space-cluster-popover span,
+.address-space-cluster-popover code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.address-space-cluster-popover span {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.address-space-cluster-popover code {
+  color: var(--muted);
+  font-size: 10px;
+}
+
 .address-space-unknown {
   align-items: center;
   background: rgba(255, 255, 255, 0.94);

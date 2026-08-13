@@ -198,6 +198,29 @@ class RangesInterpreterTest(unittest.TestCase):
             ["UNSUPPORTED_BUS_ADDRESS_FORMAT"],
         )
 
+    def test_complex_parent_bus_address_format_is_unsupported(self) -> None:
+        bus = bus_node(
+            ranges(
+                0x1000,
+                0x02000000,
+                0x00000000,
+                0x40000000,
+                0x100,
+            )
+        )
+
+        mappings, warnings = self.interpreter.interpret(
+            bus,
+            child_context=cell_context("/soc", address_cells=1, size_cells=1),
+            parent_context=cell_context("/", address_cells=3, size_cells=1),
+        )
+
+        self.assertEqual(mappings, ())
+        self.assertEqual(
+            [warning.code for warning in warnings],
+            ["UNSUPPORTED_BUS_ADDRESS_FORMAT"],
+        )
+
     def test_non_empty_ranges_with_zero_size_cells_are_unsupported(self) -> None:
         bus = bus_node(ranges(0x0, 0x80000000))
 

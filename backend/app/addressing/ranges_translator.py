@@ -60,7 +60,11 @@ class RangesInterpreter:
         if provenance_warning is not None:
             return (), (provenance_warning,)
 
-        unsupported_warning = _unsupported_bus_address_warning(bus_node, child_context)
+        unsupported_warning = _unsupported_bus_address_warning(
+            bus_node,
+            child_context,
+            parent_context,
+        )
         if unsupported_warning is not None:
             return (), (unsupported_warning,)
 
@@ -319,17 +323,22 @@ def _context_provenance_warning(
 def _unsupported_bus_address_warning(
     bus_node: DeviceTreeNode,
     child_context: AddressCellContext,
+    parent_context: AddressCellContext,
 ) -> AddressingWarning | None:
-    if child_context.address_cells <= MAX_SIMPLE_NUMERIC_ADDRESS_CELLS:
+    if (
+        child_context.address_cells <= MAX_SIMPLE_NUMERIC_ADDRESS_CELLS
+        and parent_context.address_cells <= MAX_SIMPLE_NUMERIC_ADDRESS_CELLS
+    ):
         return None
 
     return AddressingWarning(
         code="UNSUPPORTED_BUS_ADDRESS_FORMAT",
         node_path=bus_node.path,
         message=(
-            f"Bus node {bus_node.path} uses {child_context.address_cells} "
-            "address cells; generic ranges translation only supports simple "
-            "numeric bus addresses up to 2 cells"
+            f"Bus node {bus_node.path} uses child={child_context.address_cells}, "
+            f"parent={parent_context.address_cells} address cells; generic "
+            "ranges translation only supports simple numeric address formats "
+            "up to 2 cells"
         ),
     )
 

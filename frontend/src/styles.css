@@ -790,206 +790,250 @@ button {
 
 .address-space-map {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
-.address-space-summary {
+.address-space-toolbar {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.address-space-summary span {
+.address-space-toolbar button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 30px;
+  padding: 5px 9px;
+}
+
+.address-space-toolbar button:hover:not(:disabled) {
+  background: var(--accent-wash);
+  border-color: var(--border-strong);
+  color: var(--accent-strong);
+}
+
+.address-space-toolbar button:disabled {
+  color: #98a2b3;
+  cursor: not-allowed;
+}
+
+.address-space-toolbar span {
   background: var(--muted-soft);
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--muted);
   font-size: 11px;
-  font-weight: 700;
-  padding: 2px 8px;
+  font-weight: 800;
+  min-width: 42px;
+  padding: 3px 8px;
+  text-align: center;
 }
 
-.address-space-list {
+.address-space-window {
   display: grid;
-  gap: 0;
-  list-style: none;
-  margin: 0;
-  padding: 0;
+  gap: 8px;
 }
 
-.address-space-entry {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  min-height: 54px;
-}
-
-.address-space-entry-marker {
+.address-space-readout {
   align-items: center;
+  color: var(--muted);
   display: flex;
-  justify-content: center;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 7px;
+}
+
+.address-space-viewport {
+  background:
+    linear-gradient(90deg, rgba(37, 99, 166, 0.05) 0 1px, transparent 1px),
+    var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  height: 520px;
+  overflow: hidden;
+}
+
+.address-space-axis {
+  border-right: 1px solid var(--border);
   position: relative;
 }
 
-.address-space-entry-marker::before {
+.address-space-axis::before {
   background: var(--border-strong);
-  bottom: 0;
+  bottom: 16px;
   content: "";
+  left: 16px;
   position: absolute;
-  top: 0;
+  top: 16px;
   width: 1px;
 }
 
-.address-space-entry-marker span {
-  align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  color: var(--muted);
-  display: inline-flex;
-  font-size: 10px;
-  font-weight: 800;
-  height: 22px;
-  justify-content: center;
-  min-width: 22px;
-  padding: 0 5px;
-  position: relative;
-  text-transform: uppercase;
-  z-index: 1;
-}
-
-.address-space-region-control,
-.address-space-gap-body {
-  align-self: center;
-  border-radius: 8px;
-  display: grid;
-  gap: 8px;
-  margin: 7px 0;
-  min-width: 0;
-  padding: 9px 10px;
-}
-
-.address-space-region-control {
-  background: var(--surface-tint);
-  border: 1px solid var(--border);
-  cursor: default;
-  text-align: left;
-  width: 100%;
-}
-
-button.address-space-region-control {
-  cursor: pointer;
-}
-
-button.address-space-region-control:hover {
-  border-color: var(--border-strong);
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-
-.address-space-region-control-selected {
-  background: var(--accent-wash);
-  border-color: var(--border-strong);
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-
-.address-space-region-nested .address-space-region-control {
-  margin-left: 14px;
-  width: calc(100% - 14px);
-}
-
-.address-space-gap-body {
-  background: rgba(248, 250, 252, 0.64);
-  border: 1px dashed var(--border);
-  color: var(--muted);
-}
-
-.address-space-gap-body > span {
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.address-space-region-main {
+.address-space-tick {
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
   gap: 7px;
-  min-width: 0;
+  left: 11px;
+  position: absolute;
+  transform: translateY(-50%);
 }
 
-.address-space-region-main code {
-  flex: 1 1 160px;
-  min-width: 0;
+.address-space-tick::before {
+  background: var(--border-strong);
+  content: "";
+  height: 1px;
+  width: 11px;
 }
 
-.address-space-kind,
-.address-space-relation,
-.address-space-selected {
-  border-radius: 999px;
-  flex: 0 0 auto;
-  font-size: 10px;
-  font-weight: 800;
-  padding: 1px 7px;
-  text-transform: uppercase;
-}
-
-.address-space-kind-ram {
-  background: #e7f7ec;
-  border: 1px solid #bfe6cb;
-  color: #217447;
-}
-
-.address-space-kind-reserved {
-  background: #fff4da;
-  border: 1px solid #f3d99a;
-  color: #8a5a00;
-}
-
-.address-space-kind-device {
-  background: #eaf2ff;
-  border: 1px solid #bfd7f5;
-  color: #245b95;
-}
-
-.address-space-relation-nested {
-  background: #fce7f3;
-  border: 1px solid #f9a8d4;
-  color: #9d174d;
-}
-
-.address-space-relation-overlap {
-  background: #fee2e2;
-  border: 1px solid #fca5a5;
-  color: #991b1b;
-}
-
-.address-space-selected {
-  background: var(--accent-soft);
-  border: 1px solid var(--border-strong);
-  color: var(--accent-strong);
-}
-
-.address-space-fields {
+.address-space-lanes {
   display: grid;
   gap: 6px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0;
+  padding: 28px 10px 10px;
+  position: relative;
 }
 
-.address-space-fields div {
+.address-space-lane {
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 0;
+  position: relative;
+}
+
+.address-space-lane-heading {
+  background: rgba(255, 254, 254, 0.92);
+  border-bottom: 1px solid var(--border);
+  border-radius: 8px 8px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  left: 0;
+  letter-spacing: 0;
+  padding: 4px 6px;
+  position: absolute;
+  right: 0;
+  text-transform: uppercase;
+  top: 0;
+  z-index: 3;
+}
+
+.address-space-gap-band {
+  align-items: center;
+  background: rgba(243, 246, 249, 0.76);
+  border: 1px dashed var(--border-strong);
+  border-radius: 7px;
+  color: var(--muted);
+  display: flex;
+  gap: 8px;
+  left: 10px;
+  min-height: 8px;
+  overflow: hidden;
+  padding: 0 8px;
+  pointer-events: none;
+  position: absolute;
+  right: 10px;
+  z-index: 1;
+}
+
+.address-space-gap-band span {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.address-space-gap-band code {
+  opacity: 0.78;
+}
+
+.address-space-block {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
   display: grid;
   gap: 2px;
-  min-width: 0;
+  min-height: 8px;
+  overflow: hidden;
+  padding: 5px 7px;
+  position: absolute;
+  text-align: left;
+  z-index: 2;
 }
 
-.address-space-fields dt {
+.address-space-block:hover {
+  box-shadow: 0 0 0 2px rgba(37, 99, 166, 0.14);
+  z-index: 4;
+}
+
+.address-space-block-selected {
+  box-shadow: 0 0 0 2px var(--accent);
+  z-index: 5;
+}
+
+.address-space-block-ram {
+  background: #dff4e7;
+  border-color: #9ed9b3;
+  color: #14532d;
+}
+
+.address-space-block-reserved {
+  background: #fff0c2;
+  border-color: #f3cc68;
+  color: #7a4d00;
+}
+
+.address-space-block-device {
+  background: #dbeafe;
+  border-color: #a8c8f0;
+  color: #1e4f84;
+}
+
+.address-space-block-nested {
+  border-style: dashed;
+}
+
+.address-space-block-overlap {
+  outline: 2px solid rgba(220, 38, 38, 0.52);
+}
+
+.address-space-block span,
+.address-space-block em {
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.address-space-block code,
+.address-space-block small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.address-space-block small {
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+}
+
+.address-space-pan {
+  align-items: center;
   color: var(--muted);
-  font-size: 11px;
+  display: grid;
+  font-size: 12px;
+  gap: 8px;
+  grid-template-columns: 32px minmax(0, 1fr);
 }
 
-.address-space-fields dd {
-  margin: 0;
-  min-width: 0;
+.address-space-pan input {
+  width: 100%;
 }
 
 .translation-resource-view {
@@ -1078,8 +1122,10 @@ button.address-space-region-control:hover {
 }
 
 .addressing-fields code,
-.address-space-fields code,
-.address-space-region-main code,
+.address-space-block code,
+.address-space-gap-band code,
+.address-space-readout code,
+.address-space-tick code,
 .trace-address-pair code,
 .trace-endpoint code,
 .trace-step-header code,
@@ -1356,18 +1402,31 @@ button.address-space-region-control:hover {
 
   .metadata-row,
   .property-fields div,
-  .addressing-fields div,
-  .address-space-fields {
+  .addressing-fields div {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .address-space-entry {
-    grid-template-columns: 26px minmax(0, 1fr);
+  .address-space-viewport {
+    grid-template-columns: 82px minmax(0, 1fr);
   }
 
-  .address-space-region-nested .address-space-region-control {
-    margin-left: 8px;
-    width: calc(100% - 8px);
+  .address-space-lanes {
+    gap: 4px;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .address-space-gap-band {
+    left: 6px;
+    right: 6px;
+  }
+
+  .address-space-block {
+    padding: 4px 5px;
+  }
+
+  .address-space-block small {
+    display: none;
   }
 
   .trace-endpoint {

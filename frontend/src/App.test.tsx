@@ -213,7 +213,7 @@ describe("App", () => {
 
     expect(await screen.findByRole("tab", { name: "Properties" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Addressing" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Address Space" }));
     fireEvent.click(
       screen.getByRole("button", {
         name: "Select address region /soc@107c000000/uart@1000",

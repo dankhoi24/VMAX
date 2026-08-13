@@ -42,7 +42,7 @@ describe("AddressSpaceMap", () => {
     expect(regionButtons[1].textContent).toContain(
       "/device@1000000000000001",
     );
-    expect(screen.getByText("0x1000000000000001")).toBeTruthy();
+    expect(regionButtons[1].textContent).toContain("0x1000000000000001");
   });
 
   it("renders meaningful gaps plus nested and overlapping regions", () => {
@@ -84,9 +84,70 @@ describe("AddressSpaceMap", () => {
     expect(screen.getByLabelText("CPU Physical Address Space")).toBeTruthy();
     expect(screen.getByText("nested")).toBeTruthy();
     expect(screen.getByText("overlap")).toBeTruthy();
-    expect(screen.getByText("0x500")).toBeTruthy();
-    expect(screen.getByText("0x7ff")).toBeTruthy();
-    expect(screen.getAllByText("0x300").length).toBeGreaterThan(0);
+    expect(screen.getByText("0x500 - 0x7ff")).toBeTruthy();
+    expect(
+      screen.getByRole("button", {
+        name: "Select address region /soc/dma@300",
+      }).textContent,
+    ).toContain("0x300");
+  });
+
+  it("renders region height proportionally to physical size", () => {
+    render(
+      <AddressSpaceMap
+        regions={[
+          region({
+            node_path: "/small@0",
+            kind: "device",
+            start: "0x0",
+            size: "0x100",
+            end: "0xff",
+          }),
+          region({
+            node_path: "/large@100",
+            kind: "device",
+            start: "0x100",
+            size: "0x400",
+            end: "0x4ff",
+          }),
+        ]}
+      />,
+    );
+
+    const small = screen.getByRole("button", {
+      name: "Select address region /small@0",
+    });
+    const large = screen.getByRole("button", {
+      name: "Select address region /large@100",
+    });
+
+    expect(parseFloat(large.style.height)).toBeGreaterThan(
+      parseFloat(small.style.height),
+    );
+  });
+
+  it("zooms with controls and can fit all regions", () => {
+    render(
+      <AddressSpaceMap
+        regions={[
+          region({
+            node_path: "/memory@0",
+            kind: "ram",
+            start: "0x0",
+            size: "0x100000",
+            end: "0xfffff",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("1x")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    expect(screen.getByText("2x")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Fit All" }));
+    expect(screen.getByText("1x")).toBeTruthy();
   });
 
   it("selects a Device Tree node when a region is clicked", () => {
@@ -115,7 +176,11 @@ describe("AddressSpaceMap", () => {
     );
 
     expect(onSelectRegion).toHaveBeenCalledWith("/soc/uart@1000");
-    expect(screen.getByText("selected")).toBeTruthy();
+    expect(
+      screen.getByRole("button", {
+        name: "Select address region /soc/uart@1000",
+      }).className,
+    ).toContain("address-space-block-selected");
   });
 
   it("builds entries without fabricating gaps inside covered ranges", () => {

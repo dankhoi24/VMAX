@@ -5,11 +5,18 @@ import type {
   DeviceTreeProperty,
   PropertyValue,
 } from "../models/devicetree";
+import { AddressSpaceMap } from "./AddressSpaceMap";
 import {
   AddressingPanel,
   type AddressingPanelState,
 } from "./AddressingPanel";
-import { CheckIcon, CopyIcon, NodeIcon, PropertiesIcon } from "./icons";
+import {
+  AddressingIcon,
+  CheckIcon,
+  CopyIcon,
+  NodeIcon,
+  PropertiesIcon,
+} from "./icons";
 
 interface PropertyPanelProps {
   node: DeviceTreeNode | null;
@@ -17,7 +24,7 @@ interface PropertyPanelProps {
   onSelectNodePath?: (nodePath: string) => void;
 }
 
-type InspectorTab = "properties" | "addressing";
+type InspectorTab = "properties" | "addressing" | "address-space";
 
 const defaultAddressingState: AddressingPanelState = { status: "idle" };
 
@@ -67,18 +74,87 @@ export function PropertyPanel({
         >
           Addressing
         </button>
+        <button
+          className={getTabClassName(activeTab === "address-space")}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "address-space"}
+          onClick={() => setActiveTab("address-space")}
+        >
+          Address Space
+        </button>
       </div>
 
-      {activeTab === "properties" ? (
-        <PropertiesContent node={node} />
-      ) : (
-        <AddressingPanel
-          node={node}
+      {activeTab === "properties" && <PropertiesContent node={node} />}
+      {activeTab === "addressing" && (
+        <AddressingPanel node={node} state={addressingState} />
+      )}
+      {activeTab === "address-space" && (
+        <AddressSpaceContent
+          selectedNodePath={node.path}
           state={addressingState}
           onSelectNodePath={onSelectNodePath}
         />
       )}
     </aside>
+  );
+}
+
+interface AddressSpaceContentProps {
+  selectedNodePath: string;
+  state: AddressingPanelState;
+  onSelectNodePath?: (nodePath: string) => void;
+}
+
+function AddressSpaceContent({
+  selectedNodePath,
+  state,
+  onSelectNodePath,
+}: AddressSpaceContentProps) {
+  if (state.status === "loading") {
+    return (
+      <section className="addressing-section" aria-live="polite">
+        <p className="addressing-empty-text">Loading addressing data...</p>
+      </section>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <section className="addressing-section addressing-error" aria-live="polite">
+        <h3>Unable to load addressing data</h3>
+        <p>{state.message}</p>
+        {state.detail.length > 0 && (
+          <ul>
+            {state.detail.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+    );
+  }
+
+  if (state.status !== "success") {
+    return (
+      <section className="addressing-section">
+        <p className="addressing-empty-text">No addressing data loaded.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="addressing-section" aria-labelledby="address-space-heading">
+      <div className="addressing-section-heading">
+        <AddressingIcon className="panel-icon" />
+        <h3 id="address-space-heading">CPU Physical Address Space</h3>
+      </div>
+      <AddressSpaceMap
+        regions={state.report.regions}
+        selectedNodePath={selectedNodePath}
+        onSelectRegion={onSelectNodePath}
+      />
+    </section>
   );
 }
 

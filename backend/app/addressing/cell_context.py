@@ -16,23 +16,10 @@ DEFAULT_SIZE_CELLS = 1
 
 
 class AddressCellContextResolver:
-    def resolve(
+    def resolve_for_children(
         self,
-        node: DeviceTreeNode,
-        tree: DeviceTree,
+        source_node: DeviceTreeNode,
     ) -> tuple[AddressCellContext | None, tuple[AddressingWarning, ...]]:
-        source_node, parent_warnings = self._get_source_node(node, tree)
-
-        if source_node is None:
-            context = AddressCellContext(
-                address_cells=DEFAULT_ADDRESS_CELLS,
-                size_cells=DEFAULT_SIZE_CELLS,
-                source_node_path=node.parent_path or node.path,
-                used_default_address_cells=True,
-                used_default_size_cells=True,
-            )
-            return context, parent_warnings
-
         address_cells, used_default_address_cells, address_warnings = (
             self._read_cell_count(
                 source_node=source_node,
@@ -50,7 +37,7 @@ class AddressCellContextResolver:
             malformed_code="MALFORMED_SIZE_CELLS",
         )
 
-        warnings = parent_warnings + address_warnings + size_warnings
+        warnings = address_warnings + size_warnings
         if address_cells is None or size_cells is None:
             return None, warnings
 
@@ -62,6 +49,29 @@ class AddressCellContextResolver:
             used_default_size_cells=used_default_size_cells,
         )
         return context, warnings
+
+    def resolve(
+        self,
+        node: DeviceTreeNode,
+        tree: DeviceTree,
+    ) -> tuple[AddressCellContext | None, tuple[AddressingWarning, ...]]:
+        source_node, parent_warnings = self._get_source_node(node, tree)
+
+        if source_node is None:
+            context = AddressCellContext(
+                address_cells=DEFAULT_ADDRESS_CELLS,
+                size_cells=DEFAULT_SIZE_CELLS,
+                source_node_path=node.parent_path or node.path,
+                used_default_address_cells=True,
+                used_default_size_cells=True,
+            )
+            return context, parent_warnings
+
+        context, context_warnings = self.resolve_for_children(source_node)
+        return (
+            context,
+            parent_warnings + context_warnings,
+        )
 
     def _get_source_node(
         self,

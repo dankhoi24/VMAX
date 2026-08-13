@@ -1,3 +1,11 @@
+from .addressing import (
+    AddressingReportResponse,
+    AddressingWarningResponse,
+    MemoryRegionResponse,
+    RangeMappingResponse,
+    TranslatedAddressRangeResponse,
+    TranslationStepResponse,
+)
 from .devicetree import (
     DeviceTreeNodeResponse,
     DeviceTreePropertyResponse,
@@ -8,11 +16,17 @@ from .devicetree import (
 )
 
 __all__ = [
+    "AddressingReportResponse",
+    "AddressingWarningResponse",
     "DeviceTreeNodeResponse",
     "DeviceTreePropertyResponse",
     "DeviceTreeResponse",
     "ErrorResponse",
+    "MemoryRegionResponse",
     "MetadataResponse",
     "ParseErrorDetail",
+    "RangeMappingResponse",
+    "TranslatedAddressRangeResponse",
+    "TranslationStepResponse",
 ]
 

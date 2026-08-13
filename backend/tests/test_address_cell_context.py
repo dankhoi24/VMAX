@@ -141,6 +141,23 @@ class AddressCellContextResolverTest(unittest.TestCase):
         self.assertEqual(context.size_cells, 0)
         self.assertEqual(warnings, ())
 
+    def test_resolve_for_children_reads_context_from_source_node(self) -> None:
+        bus = DeviceTreeNode(
+            name="soc",
+            path="/soc",
+            parent_path="/",
+            properties=(cells("#address-cells", 1), cells("#size-cells", 0)),
+        )
+
+        context, warnings = self.resolver.resolve_for_children(bus)
+
+        self.assertEqual(context.source_node_path, "/soc")
+        self.assertEqual(context.address_cells, 1)
+        self.assertEqual(context.size_cells, 0)
+        self.assertFalse(context.used_default_address_cells)
+        self.assertFalse(context.used_default_size_cells)
+        self.assertEqual(warnings, ())
+
     def test_root_node_uses_defaults_with_no_parent_warning(self) -> None:
         root = DeviceTreeNode(name="/", path="/")
         tree = DeviceTree(root=root)

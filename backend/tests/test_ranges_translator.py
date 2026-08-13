@@ -82,6 +82,19 @@ class RangesInterpreterTest(unittest.TestCase):
         self.assertEqual(mappings, ())
         self.assertEqual(warnings, ())
 
+    def test_empty_ranges_still_validates_context_provenance(self) -> None:
+        mappings, warnings = self.interpreter.interpret(
+            bus_node(ranges()),
+            child_context=cell_context("/pcie", address_cells=1, size_cells=1),
+            parent_context=cell_context("/", address_cells=1, size_cells=1),
+        )
+
+        self.assertEqual(mappings, ())
+        self.assertEqual(
+            [warning.code for warning in warnings],
+            ["RANGES_CHILD_CONTEXT_MISMATCH"],
+        )
+
     def test_malformed_ranges_property_returns_warning(self) -> None:
         bus = bus_node(
             DeviceTreeProperty(
@@ -131,6 +144,60 @@ class RangesInterpreterTest(unittest.TestCase):
             ["RANGES_CONTEXT_UNRESOLVED"],
         )
 
+    def test_child_context_must_come_from_bus_node(self) -> None:
+        bus = bus_node(ranges(0x0, 0x80000000, 0x1000))
+
+        mappings, warnings = self.interpreter.interpret(
+            bus,
+            child_context=cell_context("/pcie", address_cells=1, size_cells=1),
+            parent_context=cell_context("/", address_cells=1, size_cells=1),
+        )
+
+        self.assertEqual(mappings, ())
+        self.assertEqual(
+            [warning.code for warning in warnings],
+            ["RANGES_CHILD_CONTEXT_MISMATCH"],
+        )
+
+    def test_parent_context_must_come_from_bus_parent(self) -> None:
+        bus = bus_node(ranges(0x0, 0x80000000, 0x1000))
+
+        mappings, warnings = self.interpreter.interpret(
+            bus,
+            child_context=cell_context("/soc", address_cells=1, size_cells=1),
+            parent_context=cell_context("/pcie", address_cells=1, size_cells=1),
+        )
+
+        self.assertEqual(mappings, ())
+        self.assertEqual(
+            [warning.code for warning in warnings],
+            ["RANGES_PARENT_CONTEXT_MISMATCH"],
+        )
+
+    def test_complex_bus_address_format_is_unsupported(self) -> None:
+        bus = bus_node(
+            ranges(
+                0x02000000,
+                0x00000000,
+                0x40000000,
+                0x00000000,
+                0x40000000,
+                0x00001000,
+            )
+        )
+
+        mappings, warnings = self.interpreter.interpret(
+            bus,
+            child_context=cell_context("/soc", address_cells=3, size_cells=1),
+            parent_context=cell_context("/", address_cells=2, size_cells=1),
+        )
+
+        self.assertEqual(mappings, ())
+        self.assertEqual(
+            [warning.code for warning in warnings],
+            ["UNSUPPORTED_BUS_ADDRESS_FORMAT"],
+        )
+
     def test_non_empty_ranges_with_zero_size_cells_are_unsupported(self) -> None:
         bus = bus_node(ranges(0x0, 0x80000000))
 
@@ -165,6 +232,27 @@ class RangesTranslatorTest(unittest.TestCase):
         self.assertEqual(translated.translation_path[0].input_address, 0x1000)
         self.assertEqual(translated.translation_path[0].output_address, 0x107D001000)
         self.assertEqual(translated.translation_path[0].mapping_index, 0)
+
+    def test_translator_selects_second_matching_mapping(self) -> None:
+        tree, device = make_single_bus_tree(
+            ranges(
+                0x0000,
+                0x0,
+                0x80000000,
+                0x1000,
+                0x2000,
+                0x0,
+                0x90000000,
+                0x2000,
+            )
+        )
+        region = reg_region(device.path, bus_address=0x2100, size=0x100)
+
+        translated = self.translator.translate(region, device, tree)
+
+        self.assertEqual(translated.cpu_address, 0x90000100)
+        self.assertEqual(translated.warnings, ())
+        self.assertEqual(translated.translation_path[0].mapping_index, 1)
 
     def test_empty_ranges_translates_as_identity(self) -> None:
         tree, device = make_single_bus_tree(ranges())

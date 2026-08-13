@@ -19,6 +19,7 @@ from app.model.devicetree import (
 
 RANGES_PROPERTY = "ranges"
 MAX_CELL_VALUE = 0xFFFFFFFF
+MAX_SIMPLE_NUMERIC_ADDRESS_CELLS = 2
 
 
 class RangesInterpreter:
@@ -42,9 +43,6 @@ class RangesInterpreter:
                 ),
             )
 
-        if len(cells) == 0:
-            return (), ()
-
         if child_context is None or parent_context is None:
             return (), (
                 AddressingWarning(
@@ -53,6 +51,21 @@ class RangesInterpreter:
                     message="Cannot interpret ranges without child and parent cell contexts",
                 ),
             )
+
+        provenance_warning = _context_provenance_warning(
+            bus_node,
+            child_context,
+            parent_context,
+        )
+        if provenance_warning is not None:
+            return (), (provenance_warning,)
+
+        unsupported_warning = _unsupported_bus_address_warning(bus_node, child_context)
+        if unsupported_warning is not None:
+            return (), (unsupported_warning,)
+
+        if len(cells) == 0:
+            return (), ()
 
         if child_context.size_cells == 0:
             return (), (
@@ -199,11 +212,12 @@ class RangesTranslator:
                 if mapping is None:
                     warnings.append(
                         AddressingWarning(
-                            code="RANGE_MAPPING_NOT_FOUND",
-                            node_path=bus_node.path,
-                            message=(
-                                f"No ranges mapping on {bus_node.path} contains "
-                                f"address 0x{current_address:x}"
+                        code="RANGE_MAPPING_NOT_FOUND",
+                        node_path=bus_node.path,
+                        message=(
+                                f"No ranges mapping on {bus_node.path} covers "
+                                f"region start=0x{current_address:x} "
+                                f"size={_format_optional_hex(region.size)}"
                             ),
                         )
                     )
@@ -270,6 +284,56 @@ def _combine_cells(cells: tuple[int, ...]) -> int:
     return value
 
 
+def _context_provenance_warning(
+    bus_node: DeviceTreeNode,
+    child_context: AddressCellContext,
+    parent_context: AddressCellContext,
+) -> AddressingWarning | None:
+    if child_context.source_node_path != bus_node.path:
+        return AddressingWarning(
+            code="RANGES_CHILD_CONTEXT_MISMATCH",
+            node_path=bus_node.path,
+            message=(
+                f"Ranges child context comes from "
+                f"{child_context.source_node_path}, but bus node is {bus_node.path}"
+            ),
+        )
+
+    if (
+        bus_node.parent_path is not None
+        and parent_context.source_node_path != bus_node.parent_path
+    ):
+        return AddressingWarning(
+            code="RANGES_PARENT_CONTEXT_MISMATCH",
+            node_path=bus_node.path,
+            message=(
+                f"Ranges parent context comes from "
+                f"{parent_context.source_node_path}, but bus parent is "
+                f"{bus_node.parent_path}"
+            ),
+        )
+
+    return None
+
+
+def _unsupported_bus_address_warning(
+    bus_node: DeviceTreeNode,
+    child_context: AddressCellContext,
+) -> AddressingWarning | None:
+    if child_context.address_cells <= MAX_SIMPLE_NUMERIC_ADDRESS_CELLS:
+        return None
+
+    return AddressingWarning(
+        code="UNSUPPORTED_BUS_ADDRESS_FORMAT",
+        node_path=bus_node.path,
+        message=(
+            f"Bus node {bus_node.path} uses {child_context.address_cells} "
+            "address cells; generic ranges translation only supports simple "
+            "numeric bus addresses up to 2 cells"
+        ),
+    )
+
+
 def _find_mapping(
     mappings: tuple[RangeMapping, ...],
     address: int,
@@ -290,6 +354,12 @@ def _mapping_contains(mapping: RangeMapping, address: int, size: int | None) -> 
         return address < mapping_limit
 
     return address + size <= mapping_limit
+
+
+def _format_optional_hex(value: int | None) -> str:
+    if value is None:
+        return "unknown"
+    return f"0x{value:x}"
 
 
 def _untranslated(

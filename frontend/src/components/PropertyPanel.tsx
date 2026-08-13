@@ -21,19 +21,25 @@ import {
 interface PropertyPanelProps {
   node: DeviceTreeNode | null;
   addressingState?: AddressingPanelState;
+  onActiveTabChange?: (tab: InspectorTab) => void;
   onSelectNodePath?: (nodePath: string) => void;
 }
 
-type InspectorTab = "properties" | "addressing" | "address-space";
+export type InspectorTab = "properties" | "addressing" | "address-space";
 
 const defaultAddressingState: AddressingPanelState = { status: "idle" };
 
 export function PropertyPanel({
   node,
   addressingState = defaultAddressingState,
+  onActiveTabChange,
   onSelectNodePath,
 }: PropertyPanelProps) {
   const [activeTab, setActiveTab] = useState<InspectorTab>("properties");
+
+  useEffect(() => {
+    onActiveTabChange?.(activeTab);
+  }, [activeTab, onActiveTabChange]);
 
   if (!node) {
     return (

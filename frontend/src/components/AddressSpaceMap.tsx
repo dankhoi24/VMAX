@@ -18,6 +18,11 @@ interface AddressSpaceRange {
   span: bigint;
 }
 
+interface ViewportState {
+  start: bigint;
+  span: bigint;
+}
+
 export interface AddressSpaceRegionEntry {
   entryKind: "region";
   region: MemoryRegion;
@@ -43,11 +48,10 @@ interface AddressSpaceMapProps {
 }
 
 const KIND_LANES: MemoryRegion["kind"][] = ["ram", "reserved", "device"];
-const MAX_ZOOM = 4096;
-const MIN_REGION_HEIGHT = 8;
-const MIN_GAP_HEIGHT = 8;
-const TARGET_SELECTED_HEIGHT = 64;
-const VIEWPORT_HEIGHT = 520;
+const HITBOX_HEIGHT = 14;
+const MIN_VISUAL_HEIGHT = 1;
+const PLOT_HEIGHT = 520;
+const PLOT_HEIGHT_BIGINT = BigInt(PLOT_HEIGHT);
 
 const REGION_LABELS: Record<MemoryRegion["kind"], string> = {
   device: "DEVICE",
@@ -61,23 +65,31 @@ export function AddressSpaceMap({
   onSelectRegion,
 }: AddressSpaceMapProps) {
   const model = useMemo(() => buildAddressSpaceModel(regions), [regions]);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState(0);
-  const selectedRegion = model.regions.find(
-    (entry) => entry.region.node_path === selectedNodePath,
+  const selectedRange = useMemo(
+    () => getSelectedRange(model.regions, selectedNodePath),
+    [model.regions, selectedNodePath],
   );
-  const viewport = getViewportRange(model.range, zoom, pan);
+  const [viewportState, setViewportState] = useState<ViewportState | null>(null);
+  const [drag, setDrag] = useState<{
+    pointerId: number;
+    startY: number;
+    viewportStart: bigint;
+  } | null>(null);
+  const viewport = clampViewport(
+    model.range,
+    viewportState ?? getFullViewport(model.range),
+  );
+  const panPercent = getPanPercent(model.range, viewport);
 
   useEffect(() => {
-    setZoom(1);
-    setPan(0);
+    setViewportState(getFullViewport(model.range));
   }, [model.range.start, model.range.end]);
 
   useEffect(() => {
-    if (selectedRegion) {
-      focusRegion(selectedRegion);
+    if (selectedRange) {
+      setViewportState(fitRangeViewport(model.range, selectedRange));
     }
-  }, [selectedNodePath, selectedRegion]);
+  }, [model.range, selectedRange]);
 
   if (model.regions.length === 0) {
     return (
@@ -88,45 +100,77 @@ export function AddressSpaceMap({
   }
 
   function fitAll() {
-    setZoom(1);
-    setPan(0);
+    setViewportState(getFullViewport(model.range));
   }
 
   function fitSelected() {
-    if (selectedRegion) {
-      focusRegion(selectedRegion);
+    if (selectedRange) {
+      setViewportState(fitRangeViewport(model.range, selectedRange));
     }
   }
 
-  function focusRegion(region: AddressSpaceRegionEntry) {
-    const nextZoom = getFitSelectedZoom(model.range, region);
-    const nextViewport = getViewportRange(model.range, nextZoom, pan);
-    const nextPan = getPanForCenter(
-      model.range,
-      nextZoom,
-      getRegionCenter(region),
-      nextViewport.span,
-    );
-
-    setZoom(nextZoom);
-    setPan(nextPan);
-  }
-
-  function zoomBy(factor: number) {
+  function zoomBy(factor: bigint) {
     const center = viewport.start + viewport.span / 2n;
-    const nextZoom = clampZoom(Math.round(zoom * factor));
-    const nextViewport = getViewportRange(model.range, nextZoom, pan);
-    setZoom(nextZoom);
-    setPan(getPanForCenter(model.range, nextZoom, center, nextViewport.span));
+    const nextSpan =
+      factor < 0n
+        ? viewport.span * -factor
+        : ceilDiv(viewport.span, factor);
+
+    setViewportState(getCenteredViewport(model.range, center, nextSpan));
   }
 
-  function updatePan(nextPan: number) {
-    setPan(clampPan(nextPan));
+  function updatePan(nextPanPercent: number) {
+    const available = getPanAvailable(model.range, viewport.span);
+
+    if (available === 0n) {
+      setViewportState(getFullViewport(model.range));
+      return;
+    }
+
+    setViewportState(
+      clampViewport(model.range, {
+        start:
+          model.range.start +
+          (available * BigInt(clampPercent(nextPanPercent))) / 1000n,
+        span: viewport.span,
+      }),
+    );
   }
 
   function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
     event.preventDefault();
-    zoomBy(event.deltaY > 0 ? 0.5 : 2);
+    zoomBy(event.deltaY > 0 ? -2n : 2n);
+  }
+
+  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDrag({
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      viewportStart: viewport.start,
+    });
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaPixels = Math.round(event.clientY - drag.startY);
+    const deltaAddress = (BigInt(deltaPixels) * viewport.span) / PLOT_HEIGHT_BIGINT;
+
+    setViewportState(
+      clampViewport(model.range, {
+        start: drag.viewportStart - deltaAddress,
+        span: viewport.span,
+      }),
+    );
+  }
+
+  function handlePointerEnd(event: React.PointerEvent<HTMLDivElement>) {
+    if (drag?.pointerId === event.pointerId) {
+      setDrag(null);
+    }
   }
 
   const visibleGaps = model.gaps.filter((gap) => intersects(gap, viewport));
@@ -138,17 +182,17 @@ export function AddressSpaceMap({
   return (
     <div className="address-space-map">
       <div className="address-space-toolbar" aria-label="Address space controls">
-        <button type="button" onClick={() => zoomBy(0.5)}>
+        <button type="button" onClick={() => zoomBy(-2n)}>
           -
         </button>
-        <span>{formatZoom(zoom)}</span>
-        <button type="button" onClick={() => zoomBy(2)}>
+        <span>{formatSpan(viewport.span)}</span>
+        <button type="button" onClick={() => zoomBy(2n)}>
           +
         </button>
         <button type="button" onClick={fitAll}>
           Fit All
         </button>
-        <button type="button" onClick={fitSelected} disabled={!selectedRegion}>
+        <button type="button" onClick={fitSelected} disabled={!selectedRange}>
           Fit Selected
         </button>
       </div>
@@ -160,51 +204,60 @@ export function AddressSpaceMap({
           <code>{formatHex(viewport.end)}</code>
         </div>
 
-        <div
-          className="address-space-viewport"
-          aria-label="CPU Physical Address Space"
-          onWheel={handleWheel}
-        >
-          <div className="address-space-axis" aria-hidden="true">
-            {tickAddresses.map((address) => (
-              <div
-                className="address-space-tick"
-                key={address.toString()}
-                style={{
-                  top: `${getAddressY(address, viewport)}px`,
-                }}
-              >
-                <code>{formatHex(address)}</code>
-              </div>
+        <div className="address-space-viewport">
+          <div className="address-space-header">
+            <span>Address</span>
+            {KIND_LANES.map((kind) => (
+              <span key={kind}>{REGION_LABELS[kind]}</span>
             ))}
           </div>
 
-          <div className="address-space-lanes">
-            {KIND_LANES.map((kind) => (
-              <div className="address-space-lane" key={kind}>
-                <div className="address-space-lane-heading">
-                  {REGION_LABELS[kind]}
+          <div
+            className={drag ? "address-space-plot address-space-plot-dragging" : "address-space-plot"}
+            aria-label="CPU Physical Address Space"
+            onWheel={handleWheel}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerEnd}
+            onPointerCancel={handlePointerEnd}
+          >
+            <div className="address-space-axis" aria-hidden="true">
+              {tickAddresses.map((address) => (
+                <div
+                  className="address-space-tick"
+                  key={address.toString()}
+                  style={{
+                    top: `${getAddressY(address, viewport)}px`,
+                  }}
+                >
+                  <code>{formatHex(address)}</code>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
 
-            {visibleGaps.map((gap) => (
-              <AddressSpaceGap
-                gap={gap}
-                key={`gap:${gap.start.toString()}:${gap.end.toString()}`}
-                viewport={viewport}
-              />
-            ))}
+            <div className="address-space-plot-lanes">
+              {KIND_LANES.map((kind) => (
+                <div className="address-space-lane" key={kind} />
+              ))}
 
-            {visibleRegions.map((entry) => (
-              <AddressSpaceRegion
-                entry={entry}
-                isSelected={entry.region.node_path === selectedNodePath}
-                key={`${entry.region.node_path}:${entry.region.start}`}
-                onSelectRegion={onSelectRegion}
-                viewport={viewport}
-              />
-            ))}
+              {visibleGaps.map((gap) => (
+                <AddressSpaceGap
+                  gap={gap}
+                  key={`gap:${gap.start.toString()}:${gap.end.toString()}`}
+                  viewport={viewport}
+                />
+              ))}
+
+              {visibleRegions.map((entry, index) => (
+                <AddressSpaceRegion
+                  entry={entry}
+                  isSelected={entry.region.node_path === selectedNodePath}
+                  key={`${entry.region.node_path}:${entry.region.start}:${index}`}
+                  onSelectRegion={onSelectRegion}
+                  viewport={viewport}
+                />
+              ))}
+            </div>
           </div>
         </div>
 
@@ -214,9 +267,9 @@ export function AddressSpaceMap({
             type="range"
             min="0"
             max="1000"
-            value={pan}
+            value={panPercent}
             onChange={(event) => updatePan(Number(event.target.value))}
-            disabled={zoom === 1}
+            disabled={viewport.span >= model.range.span}
             aria-label="Pan address space"
           />
         </label>
@@ -238,14 +291,14 @@ function AddressSpaceGap({
   gap: AddressSpaceGapEntry;
   viewport: AddressSpaceRange;
 }) {
-  const bounds = getVisibleBounds(gap.start, gap.end, viewport, MIN_GAP_HEIGHT);
+  const bounds = getVisibleBounds(gap.start, gap.end, viewport);
 
   return (
     <div
       className="address-space-gap-band"
       style={{
-        height: `${bounds.height}px`,
-        top: `${bounds.top}px`,
+        height: `${bounds.visualHeight}px`,
+        top: `${bounds.visualTop}px`,
       }}
     >
       <span>GAP</span>
@@ -267,46 +320,54 @@ function AddressSpaceRegion({
   onSelectRegion?: (nodePath: string) => void;
   viewport: AddressSpaceRange;
 }) {
-  const bounds = getVisibleBounds(
-    entry.start,
-    entry.end,
-    viewport,
-    MIN_REGION_HEIGHT,
-  );
+  const bounds = getVisibleBounds(entry.start, entry.end, viewport);
   const laneIndex = KIND_LANES.indexOf(entry.region.kind);
   const className = [
-    "address-space-block",
-    `address-space-block-${entry.region.kind}`,
-    `address-space-block-${entry.relation}`,
-    isSelected ? "address-space-block-selected" : "",
+    "address-space-region-hitbox",
+    `address-space-region-hitbox-${entry.region.kind}`,
+    `address-space-region-hitbox-${entry.relation}`,
+    isSelected ? "address-space-region-hitbox-selected" : "",
   ]
     .filter(Boolean)
     .join(" ");
-  const content = (
-    <>
-      <span>{REGION_LABELS[entry.region.kind]}</span>
-      <code>{entry.region.node_path}</code>
-      <small>
-        {entry.region.start} - {entry.region.end ?? "-"}
-      </small>
-      {entry.relation !== "normal" && <em>{entry.relation}</em>}
-    </>
-  );
 
   return (
     <button
       className={className}
       type="button"
       style={{
-        height: `${bounds.height}px`,
+        height: `${bounds.hitHeight}px`,
         left: getLaneLeft(laneIndex),
-        top: `${bounds.top}px`,
+        top: `${bounds.hitTop}px`,
         width: "calc(33.333333% - 4px)",
       }}
-      onClick={() => onSelectRegion?.(entry.region.node_path)}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelectRegion?.(entry.region.node_path);
+      }}
       aria-label={`Select address region ${entry.region.node_path}`}
+      title={`${entry.region.node_path}\n${entry.region.start} - ${entry.region.end ?? "unknown"}`}
     >
-      {content}
+      <span
+        className={[
+          "address-space-region-geometry",
+          `address-space-region-geometry-${entry.region.kind}`,
+          `address-space-region-geometry-${entry.relation}`,
+        ].join(" ")}
+        style={{
+          height: `${bounds.visualHeight}px`,
+          top: `${bounds.visualTop - bounds.hitTop}px`,
+        }}
+      />
+      <span className="address-space-region-label">
+        <strong>{REGION_LABELS[entry.region.kind]}</strong>
+        <code>{entry.region.node_path}</code>
+        {entry.relation !== "normal" && <em>{entry.relation}</em>}
+      </span>
+      <small>
+        {entry.region.start} - {entry.region.end ?? "-"}
+      </small>
     </button>
   );
 }
@@ -377,15 +438,22 @@ function normalizeRegion(
   order: number,
 ): NormalizedRegion | null {
   const start = parseAddress(region.start);
+  const parsedEnd = parseAddress(region.end);
+  const parsedSize = parseAddress(region.size);
 
   if (start === null) {
     return null;
   }
 
-  const parsedEnd = parseAddress(region.end);
-  const parsedSize = parseAddress(region.size);
   const end =
-    parsedEnd ?? (parsedSize === null || parsedSize === 0n ? start : start + parsedSize - 1n);
+    parsedEnd ??
+    (parsedSize === null || parsedSize === 0n
+      ? null
+      : start + parsedSize - 1n);
+
+  if (end === null || end < start) {
+    return null;
+  }
 
   return {
     order,
@@ -432,87 +500,140 @@ function getModelRange(regions: AddressSpaceRegionEntry[]): AddressSpaceRange {
   };
 }
 
-function getViewportRange(
+function getSelectedRange(
+  regions: AddressSpaceRegionEntry[],
+  selectedNodePath: string | null,
+): AddressSpaceRange | null {
+  const selected = regions.filter(
+    (entry) => entry.region.node_path === selectedNodePath,
+  );
+
+  if (selected.length === 0) {
+    return null;
+  }
+
+  const start = selected.reduce(
+    (current, entry) => (entry.start < current ? entry.start : current),
+    selected[0].start,
+  );
+  const end = selected.reduce(
+    (current, entry) => (entry.end > current ? entry.end : current),
+    selected[0].end,
+  );
+
+  return {
+    start,
+    end,
+    span: end - start + 1n,
+  };
+}
+
+function getFullViewport(range: AddressSpaceRange): ViewportState {
+  return {
+    start: range.start,
+    span: range.span,
+  };
+}
+
+function fitRangeViewport(
   fullRange: AddressSpaceRange,
-  zoom: number,
-  pan: number,
+  targetRange: AddressSpaceRange,
+): ViewportState {
+  const requestedSpan = targetRange.span * 6n;
+  const span = requestedSpan > fullRange.span ? fullRange.span : requestedSpan;
+  const center = targetRange.start + targetRange.span / 2n;
+
+  return getCenteredViewport(fullRange, center, span);
+}
+
+function getCenteredViewport(
+  fullRange: AddressSpaceRange,
+  center: bigint,
+  requestedSpan: bigint,
+): ViewportState {
+  const span =
+    requestedSpan < 1n
+      ? 1n
+      : requestedSpan > fullRange.span
+        ? fullRange.span
+        : requestedSpan;
+
+  return clampViewport(fullRange, {
+    start: center - span / 2n,
+    span,
+  });
+}
+
+function clampViewport(
+  fullRange: AddressSpaceRange,
+  viewport: ViewportState,
 ): AddressSpaceRange {
-  const clampedZoom = clampZoom(zoom);
-  const viewportSpan = fullRange.span / BigInt(clampedZoom);
-  const span = viewportSpan > 0n ? viewportSpan : 1n;
+  const span =
+    viewport.span < 1n
+      ? 1n
+      : viewport.span > fullRange.span
+        ? fullRange.span
+        : viewport.span;
   const maxStart = fullRange.end - span + 1n;
-  const available = maxStart > fullRange.start ? maxStart - fullRange.start : 0n;
-  const start = fullRange.start + (available * BigInt(clampPan(pan))) / 1000n;
+  const start =
+    viewport.start < fullRange.start
+      ? fullRange.start
+      : viewport.start > maxStart
+        ? maxStart
+        : viewport.start;
   const end = start + span - 1n;
 
   return {
     start,
-    end: end > fullRange.end ? fullRange.end : end,
+    end,
     span,
   };
 }
 
-function getPanForCenter(
+function getPanAvailable(
   fullRange: AddressSpaceRange,
-  zoom: number,
-  center: bigint,
   viewportSpan: bigint,
+): bigint {
+  return fullRange.span > viewportSpan ? fullRange.span - viewportSpan : 0n;
+}
+
+function getPanPercent(
+  fullRange: AddressSpaceRange,
+  viewport: AddressSpaceRange,
 ): number {
-  const maxStart = fullRange.end - viewportSpan + 1n;
-  const available = maxStart > fullRange.start ? maxStart - fullRange.start : 0n;
+  const available = getPanAvailable(fullRange, viewport.span);
 
   if (available === 0n) {
     return 0;
   }
 
-  const unclampedStart = center - viewportSpan / 2n;
-  const start =
-    unclampedStart < fullRange.start
-      ? fullRange.start
-      : unclampedStart > maxStart
-        ? maxStart
-        : unclampedStart;
-
-  return Number(((start - fullRange.start) * 1000n) / available);
-}
-
-function getFitSelectedZoom(
-  fullRange: AddressSpaceRange,
-  region: AddressSpaceRegionEntry,
-): number {
-  const regionSize = region.end - region.start + 1n;
-  const numerator = BigInt(TARGET_SELECTED_HEIGHT) * fullRange.span;
-  const denominator = BigInt(VIEWPORT_HEIGHT) * regionSize;
-  const requested = (numerator + denominator - 1n) / denominator;
-
-  if (requested > BigInt(MAX_ZOOM)) {
-    return MAX_ZOOM;
-  }
-
-  return clampZoom(Number(requested));
-}
-
-function getRegionCenter(region: AddressSpaceRegionEntry): bigint {
-  return region.start + (region.end - region.start) / 2n;
+  return Number(((viewport.start - fullRange.start) * 1000n) / available);
 }
 
 function getVisibleBounds(
   start: bigint,
   end: bigint,
   viewport: AddressSpaceRange,
-  minimumHeight: number,
 ) {
   const visibleStart = start > viewport.start ? start : viewport.start;
   const visibleEnd = end < viewport.end ? end : viewport.end;
-  const top = getAddressY(visibleStart, viewport);
+  const visualTop = getAddressY(visibleStart, viewport);
   const rawHeight = Number(
-    ((visibleEnd - visibleStart + 1n) * BigInt(VIEWPORT_HEIGHT)) /
-      viewport.span,
+    ((visibleEnd - visibleStart + 1n) * PLOT_HEIGHT_BIGINT) / viewport.span,
+  );
+  const visualHeight = Math.max(MIN_VISUAL_HEIGHT, rawHeight);
+  const hitHeight = Math.max(HITBOX_HEIGHT, visualHeight);
+  const hitTop = clampPixel(
+    visualTop - Math.floor((hitHeight - visualHeight) / 2),
+    0,
+    PLOT_HEIGHT - hitHeight,
   );
 
   return {
-    height: Math.max(minimumHeight, rawHeight),
-    top,
+    hitHeight,
+    hitTop,
+    visualHeight,
+    visualTop,
   };
 }
 
@@ -522,11 +643,11 @@ function getAddressY(address: bigint, viewport: AddressSpaceRange): number {
   }
 
   if (address >= viewport.end) {
-    return VIEWPORT_HEIGHT;
+    return PLOT_HEIGHT;
   }
 
   return Number(
-    ((address - viewport.start) * BigInt(VIEWPORT_HEIGHT)) / viewport.span,
+    ((address - viewport.start) * PLOT_HEIGHT_BIGINT) / viewport.span,
   );
 }
 
@@ -555,16 +676,20 @@ function parseAddress(value: string | null): bigint | null {
   }
 }
 
-function clampZoom(value: number): number {
-  return Math.max(1, Math.min(MAX_ZOOM, value));
+function ceilDiv(dividend: bigint, divisor: bigint): bigint {
+  return (dividend + divisor - 1n) / divisor;
 }
 
-function clampPan(value: number): number {
+function clampPercent(value: number): number {
   return Math.max(0, Math.min(1000, value));
 }
 
-function formatZoom(zoom: number): string {
-  return `${zoom.toLocaleString()}x`;
+function clampPixel(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function formatSpan(span: bigint): string {
+  return `span ${formatHex(span)}`;
 }
 
 function getLaneLeft(laneIndex: number): string {

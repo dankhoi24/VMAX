@@ -121,8 +121,11 @@ describe("AddressSpaceMap", () => {
       name: "Select address region /large@100",
     });
 
-    expect(parseFloat(large.style.height)).toBeGreaterThan(
-      parseFloat(small.style.height),
+    const smallGeometry = small.querySelector(".address-space-region-geometry");
+    const largeGeometry = large.querySelector(".address-space-region-geometry");
+
+    expect(parseFloat((largeGeometry as HTMLElement).style.height)).toBeGreaterThan(
+      parseFloat((smallGeometry as HTMLElement).style.height),
     );
   });
 
@@ -141,13 +144,13 @@ describe("AddressSpaceMap", () => {
       />,
     );
 
-    expect(screen.getByText("1x")).toBeTruthy();
+    expect(screen.getByText("span 0x100000")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "+" }));
-    expect(screen.getByText("2x")).toBeTruthy();
+    expect(screen.getByText("span 0x80000")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Fit All" }));
-    expect(screen.getByText("1x")).toBeTruthy();
+    expect(screen.getByText("span 0x100000")).toBeTruthy();
   });
 
   it("selects a Device Tree node when a region is clicked", () => {
@@ -180,7 +183,41 @@ describe("AddressSpaceMap", () => {
       screen.getByRole("button", {
         name: "Select address region /soc/uart@1000",
       }).className,
-    ).toContain("address-space-block-selected");
+    ).toContain("address-space-region-hitbox-selected");
+  });
+
+  it("does not fabricate geometry for unknown-size regions", () => {
+    const entries = buildAddressSpaceEntries([
+      region({
+        node_path: "/unknown@1000",
+        kind: "device",
+        start: "0x1000",
+        size: null,
+        end: null,
+      }),
+      region({
+        node_path: "/known@2000",
+        kind: "device",
+        start: "0x2000",
+        size: "0x100",
+        end: "0x20ff",
+      }),
+    ]);
+
+    expect(
+      entries.some(
+        (entry) =>
+          entry.entryKind === "region" &&
+          entry.region.node_path === "/unknown@1000",
+      ),
+    ).toBe(false);
+    expect(
+      entries.some(
+        (entry) =>
+          entry.entryKind === "region" &&
+          entry.region.node_path === "/known@2000",
+      ),
+    ).toBe(true);
   });
 
   it("builds entries without fabricating gaps inside covered ranges", () => {

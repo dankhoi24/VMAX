@@ -4,7 +4,7 @@ import { getAddressingReport } from "./api/addressing";
 import { ApiError, getDeviceTree } from "./api/devicetree";
 import { DeviceTreeView } from "./components/DeviceTreeView";
 import { RefreshIcon } from "./components/icons";
-import { PropertyPanel } from "./components/PropertyPanel";
+import { PropertyPanel, type InspectorTab } from "./components/PropertyPanel";
 import { SearchBox } from "./components/SearchBox";
 import type { AddressingReport } from "./models/addressing";
 import type { DeviceTreeNode, DeviceTreeResponse } from "./models/devicetree";
@@ -28,6 +28,7 @@ export function App() {
   });
   const [selectedNode, setSelectedNode] = useState<DeviceTreeNode | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties");
   const [selectionRequest, setSelectionRequest] = useState(0);
 
   const selectNode = useCallback((node: DeviceTreeNode) => {
@@ -71,6 +72,7 @@ export function App() {
     setAddressingState({ status: "loading" });
     setSelectedNode(null);
     setExpandedPaths(new Set());
+    setInspectorTab("properties");
     setSelectionRequest(0);
 
     const addressingResult = getAddressingReport().then(
@@ -89,6 +91,7 @@ export function App() {
       setAddressingState({ status: "idle" });
       setSelectedNode(null);
       setExpandedPaths(new Set());
+      setInspectorTab("properties");
       setSelectionRequest(0);
       return;
     }
@@ -146,7 +149,13 @@ export function App() {
       )}
 
       {state.status === "success" && (
-        <div className="workspace-grid">
+        <div
+          className={
+            inspectorTab === "address-space"
+              ? "workspace-grid workspace-grid-address-space"
+              : "workspace-grid"
+          }
+        >
           <DeviceTreeView
             root={state.tree.root}
             nodeCount={state.tree.node_count}
@@ -159,6 +168,7 @@ export function App() {
           <PropertyPanel
             node={selectedNode}
             addressingState={addressingState}
+            onActiveTabChange={setInspectorTab}
             onSelectNodePath={selectNodePath}
           />
         </div>

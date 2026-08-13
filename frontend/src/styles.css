@@ -335,6 +335,10 @@ button {
   height: calc(100vh - 160px);
 }
 
+.workspace-grid-address-space {
+  grid-template-columns: minmax(320px, 0.8fr) minmax(700px, 1.6fr);
+}
+
 .tree-surface {
   display: flex;
   flex-direction: column;
@@ -490,7 +494,7 @@ button {
   background: var(--surface-tint);
   border-bottom: 1px solid var(--border);
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   padding: 8px;
 }
@@ -856,9 +860,41 @@ button {
   border: 1px solid var(--border);
   border-radius: 8px;
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr);
-  height: 520px;
+  grid-template-rows: 30px 520px;
   overflow: hidden;
+}
+
+.address-space-header {
+  background: rgba(255, 254, 254, 0.94);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 150px repeat(3, minmax(0, 1fr));
+  padding: 0 10px;
+}
+
+.address-space-header span {
+  align-items: center;
+  display: flex;
+  font-size: 10px;
+  font-weight: 800;
+  min-width: 0;
+  text-transform: uppercase;
+}
+
+.address-space-plot {
+  cursor: grab;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  height: 520px;
+  min-height: 0;
+  overflow: hidden;
+  user-select: none;
+}
+
+.address-space-plot-dragging {
+  cursor: grabbing;
 }
 
 .address-space-axis {
@@ -868,11 +904,11 @@ button {
 
 .address-space-axis::before {
   background: var(--border-strong);
-  bottom: 16px;
+  bottom: 0;
   content: "";
   left: 16px;
   position: absolute;
-  top: 16px;
+  top: 0;
   width: 1px;
 }
 
@@ -881,6 +917,7 @@ button {
   display: flex;
   gap: 7px;
   left: 11px;
+  max-width: 132px;
   position: absolute;
   transform: translateY(-50%);
 }
@@ -888,41 +925,24 @@ button {
 .address-space-tick::before {
   background: var(--border-strong);
   content: "";
+  flex: 0 0 auto;
   height: 1px;
   width: 11px;
 }
 
-.address-space-lanes {
+.address-space-plot-lanes {
   display: grid;
   gap: 6px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 28px 10px 10px;
+  padding: 0 10px;
   position: relative;
 }
 
 .address-space-lane {
   background: rgba(255, 255, 255, 0.64);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   min-width: 0;
-  position: relative;
-}
-
-.address-space-lane-heading {
-  background: rgba(255, 254, 254, 0.92);
-  border-bottom: 1px solid var(--border);
-  border-radius: 8px 8px 0 0;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 800;
-  left: 0;
-  letter-spacing: 0;
-  padding: 4px 6px;
-  position: absolute;
-  right: 0;
-  text-transform: uppercase;
-  top: 0;
-  z-index: 3;
 }
 
 .address-space-gap-band {
@@ -953,74 +973,111 @@ button {
   opacity: 0.78;
 }
 
-.address-space-block {
-  border: 1px solid transparent;
-  border-radius: 7px;
+.address-space-region-hitbox {
+  background: transparent;
+  border: 0;
   cursor: pointer;
-  display: grid;
-  gap: 2px;
-  min-height: 8px;
+  display: block;
   overflow: hidden;
-  padding: 5px 7px;
+  padding: 0;
   position: absolute;
   text-align: left;
-  z-index: 2;
+  z-index: 3;
 }
 
-.address-space-block:hover {
+.address-space-region-hitbox:hover {
+  z-index: 6;
+}
+
+.address-space-region-hitbox-selected {
+  z-index: 7;
+}
+
+.address-space-region-geometry {
+  border: 1px solid transparent;
+  border-radius: 5px;
+  left: 0;
+  min-height: 1px;
+  position: absolute;
+  right: 0;
+}
+
+.address-space-region-hitbox:hover .address-space-region-geometry {
   box-shadow: 0 0 0 2px rgba(37, 99, 166, 0.14);
-  z-index: 4;
 }
 
-.address-space-block-selected {
+.address-space-region-hitbox-selected .address-space-region-geometry {
   box-shadow: 0 0 0 2px var(--accent);
-  z-index: 5;
 }
 
-.address-space-block-ram {
+.address-space-region-geometry-ram {
   background: #dff4e7;
   border-color: #9ed9b3;
-  color: #14532d;
 }
 
-.address-space-block-reserved {
+.address-space-region-geometry-reserved {
   background: #fff0c2;
   border-color: #f3cc68;
-  color: #7a4d00;
 }
 
-.address-space-block-device {
+.address-space-region-geometry-device {
   background: #dbeafe;
   border-color: #a8c8f0;
-  color: #1e4f84;
 }
 
-.address-space-block-nested {
+.address-space-region-geometry-nested {
   border-style: dashed;
 }
 
-.address-space-block-overlap {
+.address-space-region-geometry-overlap {
   outline: 2px solid rgba(220, 38, 38, 0.52);
 }
 
-.address-space-block span,
-.address-space-block em {
+.address-space-region-label {
+  align-items: center;
+  display: flex;
+  gap: 5px;
+  left: 6px;
+  max-width: calc(100% - 12px);
+  min-width: 0;
+  position: absolute;
+  top: 0;
+}
+
+.address-space-region-label strong,
+.address-space-region-label em {
   font-size: 10px;
   font-style: normal;
   font-weight: 800;
   text-transform: uppercase;
 }
 
-.address-space-block code,
-.address-space-block small {
+.address-space-region-label code,
+.address-space-region-hitbox small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.address-space-block small {
+.address-space-region-hitbox-ram {
+  color: #14532d;
+}
+
+.address-space-region-hitbox-reserved {
+  color: #7a4d00;
+}
+
+.address-space-region-hitbox-device {
+  color: #1e4f84;
+}
+
+.address-space-region-hitbox small {
+  bottom: 0;
   font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   font-size: 10px;
+  left: 6px;
+  max-width: calc(100% - 12px);
+  position: absolute;
 }
 
 .address-space-pan {
@@ -1122,7 +1179,7 @@ button {
 }
 
 .addressing-fields code,
-.address-space-block code,
+.address-space-region-label code,
 .address-space-gap-band code,
 .address-space-readout code,
 .address-space-tick code,
@@ -1134,6 +1191,18 @@ button {
   font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.address-space-gap-band code,
+.address-space-readout code,
+.address-space-region-label code,
+.address-space-tick code {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+.address-space-tick code {
+  font-size: 11px;
 }
 
 .translation-status,
@@ -1406,11 +1475,15 @@ button {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .address-space-viewport {
-    grid-template-columns: 82px minmax(0, 1fr);
+  .address-space-header {
+    grid-template-columns: 110px repeat(3, minmax(0, 1fr));
   }
 
-  .address-space-lanes {
+  .address-space-plot {
+    grid-template-columns: 110px minmax(0, 1fr);
+  }
+
+  .address-space-plot-lanes {
     gap: 4px;
     padding-left: 6px;
     padding-right: 6px;
@@ -1421,11 +1494,12 @@ button {
     right: 6px;
   }
 
-  .address-space-block {
-    padding: 4px 5px;
+  .address-space-region-label {
+    left: 5px;
+    max-width: calc(100% - 10px);
   }
 
-  .address-space-block small {
+  .address-space-region-hitbox small {
     display: none;
   }
 

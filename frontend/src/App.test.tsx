@@ -209,11 +209,12 @@ describe("App", () => {
   it("selects and expands a node from the address space map", async () => {
     stubApi();
 
-    render(<App />);
+    const { container } = render(<App />);
 
     expect(await screen.findByRole("tab", { name: "Properties" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "Address Space" }));
+    expect(container.querySelector(".workspace-grid-address-space")).toBeTruthy();
     fireEvent.click(
       screen.getByRole("button", {
         name: "Select address region /soc@107c000000/uart@1000",

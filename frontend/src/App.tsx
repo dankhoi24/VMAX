@@ -59,19 +59,19 @@ export function App() {
     setExpandedPaths(new Set());
     setSelectionRequest(0);
 
-    const [treeResult, addressingResult] = await Promise.allSettled([
-      getDeviceTree(),
-      getAddressingReport(),
-    ]);
+    const addressingResult = getAddressingReport().then(
+      (report) => ({ status: "success" as const, report }),
+      (error: unknown) => ({ status: "error" as const, error }),
+    );
 
-    if (treeResult.status === "fulfilled") {
-      const tree = treeResult.value;
+    try {
+      const tree = await getDeviceTree();
       setState({ status: "success", tree });
       setSelectedNode(tree.root);
       setExpandedPaths(new Set([tree.root.path]));
       setSelectionRequest(1);
-    } else {
-      setState(toErrorState(treeResult.reason));
+    } catch (error) {
+      setState(toErrorState(error));
       setAddressingState({ status: "idle" });
       setSelectedNode(null);
       setExpandedPaths(new Set());
@@ -79,13 +79,14 @@ export function App() {
       return;
     }
 
-    if (addressingResult.status === "fulfilled") {
+    const resolvedAddressing = await addressingResult;
+    if (resolvedAddressing.status === "success") {
       setAddressingState({
         status: "success",
-        report: addressingResult.value,
+        report: resolvedAddressing.report,
       });
     } else {
-      setAddressingState(toAddressingErrorState(addressingResult.reason));
+      setAddressingState(toAddressingErrorState(resolvedAddressing.error));
     }
   }, []);
 

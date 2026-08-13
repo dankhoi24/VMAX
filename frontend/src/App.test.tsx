@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -115,7 +115,11 @@ function jsonResponse(body: unknown): Response {
   });
 }
 
-function stubApi(): void {
+interface StubApiOptions {
+  addressingResponse?: Response | Promise<Response>;
+}
+
+function stubApi(options: StubApiOptions = {}): void {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input) => {
@@ -124,11 +128,25 @@ function stubApi(): void {
         return jsonResponse(tree);
       }
       if (url.endsWith("/api/v1/addressing")) {
-        return jsonResponse(addressingReport);
+        return options.addressingResponse ?? jsonResponse(addressingReport);
       }
       return new Response("", { status: 404, statusText: "Not Found" });
     }),
   );
+}
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+
+  return { promise, resolve };
 }
 
 describe("App", () => {
@@ -184,5 +202,32 @@ describe("App", () => {
     expect(screen.getByText("device")).toBeTruthy();
     expect(screen.getAllByText("0x107d001000").length).toBeGreaterThan(0);
     expect(screen.getByText("0x1000 -> 0x107d001000")).toBeTruthy();
+  });
+
+  it("renders the Device Tree before delayed addressing data resolves", async () => {
+    const addressing = createDeferred<Response>();
+    stubApi({ addressingResponse: addressing.promise });
+
+    render(<App />);
+
+    expect(await screen.findByRole("tab", { name: "Properties" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "soc@107c000000" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "soc@107c000000" }));
+
+    expect(screen.getByText("compatible")).toBeTruthy();
+    expect(screen.getByText("[\"simple-bus\"]")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Addressing" }));
+
+    expect(screen.getByText("Loading addressing data...")).toBeTruthy();
+
+    await act(async () => {
+      addressing.resolve(jsonResponse(addressingReport));
+      await addressing.promise;
+    });
+
+    expect(await screen.findByText("Mapping")).toBeTruthy();
+    expect(screen.getByText("0x107d000000")).toBeTruthy();
   });
 });

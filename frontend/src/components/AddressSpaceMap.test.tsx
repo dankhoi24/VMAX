@@ -186,7 +186,132 @@ describe("AddressSpaceMap", () => {
     ).toContain("address-space-region-hitbox-selected");
   });
 
-  it("does not fabricate geometry for unknown-size regions", () => {
+  it("uses level-of-detail modes for dense labels", () => {
+    render(
+      <AddressSpaceMap
+        regions={[
+          region({
+            node_path: "/tiny@0",
+            kind: "device",
+            start: "0x0",
+            size: "0x1",
+            end: "0x0",
+          }),
+          region({
+            node_path: "/large@100000",
+            kind: "device",
+            start: "0x100000",
+            size: "0x100000",
+            end: "0x1fffff",
+          }),
+        ]}
+      />,
+    );
+
+    const tiny = screen.getByRole("button", {
+      name: "Select address region /tiny@0",
+    });
+    const large = screen.getByRole("button", {
+      name: "Select address region /large@100000",
+    });
+
+    expect(tiny.className).toContain("address-space-region-hitbox-marker");
+    expect(tiny.querySelector(".address-space-region-label")).toBeNull();
+    expect(tiny.querySelector(".address-space-region-callout")).toBeTruthy();
+    expect(large.className).toContain("address-space-region-hitbox-full");
+    expect(large.querySelector(".address-space-region-label code")).toBeTruthy();
+  });
+
+  it("clusters dense marker regions and zooms into the cluster", () => {
+    render(
+      <AddressSpaceMap
+        regions={[
+          region({
+            node_path: "/device@0",
+            kind: "device",
+            start: "0x0",
+            size: "0x1",
+            end: "0x0",
+          }),
+          region({
+            node_path: "/device@100",
+            kind: "device",
+            start: "0x100",
+            size: "0x1",
+            end: "0x100",
+          }),
+          region({
+            node_path: "/device@200",
+            kind: "device",
+            start: "0x200",
+            size: "0x1",
+            end: "0x200",
+          }),
+          region({
+            node_path: "/memory@100000",
+            kind: "ram",
+            start: "0x100000",
+            size: "0x1000",
+            end: "0x100fff",
+          }),
+        ]}
+      />,
+    );
+
+    const cluster = screen.getByRole("button", {
+      name: "Zoom into 3 address regions",
+    });
+
+    expect(cluster.textContent).toBe("+3");
+
+    fireEvent.click(cluster);
+
+    expect(
+      screen.queryByRole("button", {
+        name: "Zoom into 3 address regions",
+      }),
+    ).toBeNull();
+  });
+
+  it("shows selected resource focus controls for multi-region nodes", () => {
+    render(
+      <AddressSpaceMap
+        regions={[
+          region({
+            node_path: "/soc/device@0",
+            kind: "device",
+            start: "0x100000",
+            size: "0x100",
+            end: "0x1000ff",
+          }),
+          region({
+            node_path: "/soc/device@0",
+            kind: "device",
+            start: "0x90000000",
+            size: "0x100",
+            end: "0x900000ff",
+          }),
+        ]}
+        selectedNodePath="/soc/device@0"
+      />,
+    );
+
+    const resource0 = screen.getByRole("button", { name: "Resource 0" });
+    const resource1 = screen.getByRole("button", { name: "Resource 1" });
+    const fitNode = screen.getByRole("button", { name: "Fit Node" });
+
+    expect(resource0.className).toContain("address-space-resource-button-active");
+
+    fireEvent.click(resource1);
+
+    expect(resource1.className).toContain("address-space-resource-button-active");
+
+    fireEvent.click(fitNode);
+
+    expect(fitNode.className).toContain("address-space-resource-button-active");
+  });
+
+  it("preserves unknown-size markers without fabricating covered gaps", () => {
     const entries = buildAddressSpaceEntries([
       region({
         node_path: "/unknown@1000",
@@ -207,10 +332,10 @@ describe("AddressSpaceMap", () => {
     expect(
       entries.some(
         (entry) =>
-          entry.entryKind === "region" &&
+          entry.entryKind === "unknown" &&
           entry.region.node_path === "/unknown@1000",
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       entries.some(
         (entry) =>
@@ -218,6 +343,14 @@ describe("AddressSpaceMap", () => {
           entry.region.node_path === "/known@2000",
       ),
     ).toBe(true);
+    expect(
+      entries.some(
+        (entry) =>
+          entry.entryKind === "gap" &&
+          entry.start === 0n &&
+          entry.end === 0x1fffn,
+      ),
+    ).toBe(false);
   });
 
   it("builds entries without fabricating gaps inside covered ranges", () => {

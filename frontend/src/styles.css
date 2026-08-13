@@ -839,6 +839,36 @@ button {
   text-align: center;
 }
 
+.address-space-resource-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.address-space-resource-button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 28px;
+  padding: 4px 9px;
+}
+
+.address-space-resource-button:hover {
+  background: var(--accent-wash);
+  color: var(--accent-strong);
+}
+
+.address-space-resource-button-active,
+.address-space-resource-button-active:hover {
+  background: var(--accent-soft);
+  border-color: var(--border-strong);
+  color: var(--accent-strong);
+}
+
 .address-space-window {
   display: grid;
   gap: 8px;
@@ -954,7 +984,7 @@ button {
   display: flex;
   gap: 8px;
   left: 10px;
-  min-height: 8px;
+  min-height: 1px;
   overflow: hidden;
   padding: 0 8px;
   pointer-events: none;
@@ -971,6 +1001,17 @@ button {
 
 .address-space-gap-band code {
   opacity: 0.78;
+}
+
+.address-space-gap-band-marker {
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.address-space-gap-band-compact {
+  justify-content: center;
 }
 
 .address-space-region-hitbox {
@@ -1080,6 +1121,106 @@ button {
   position: absolute;
 }
 
+.address-space-region-hitbox-compact .address-space-region-label {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.address-space-region-hitbox-marker .address-space-region-callout {
+  display: grid;
+}
+
+.address-space-region-callout {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  display: none;
+  gap: 3px;
+  left: 10px;
+  min-width: 220px;
+  padding: 8px;
+  pointer-events: none;
+  position: absolute;
+  top: 12px;
+  z-index: 12;
+}
+
+.address-space-region-hitbox-marker:not(:hover):not(.address-space-region-hitbox-selected)
+  .address-space-region-callout {
+  display: none;
+}
+
+.address-space-region-hitbox-marker:hover .address-space-region-callout,
+.address-space-region-hitbox-marker.address-space-region-hitbox-selected
+  .address-space-region-callout {
+  display: grid;
+}
+
+.address-space-region-callout strong {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.address-space-region-callout span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.address-space-cluster {
+  align-items: center;
+  background: rgba(23, 63, 112, 0.88);
+  border: 1px solid rgba(23, 63, 112, 0.18);
+  border-radius: 999px;
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 14px;
+  padding: 0 6px;
+  position: absolute;
+  z-index: 8;
+}
+
+.address-space-cluster:hover {
+  background: var(--accent-strong);
+}
+
+.address-space-unknown {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  display: inline-flex;
+  min-height: 14px;
+  overflow: hidden;
+  padding: 0 6px;
+  position: absolute;
+  transform: translateY(-50%);
+  z-index: 6;
+}
+
+.address-space-unknown span {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.address-space-unknown-ram {
+  color: #14532d;
+}
+
+.address-space-unknown-reserved {
+  color: #7a4d00;
+}
+
+.address-space-unknown-device {
+  color: #1e4f84;
+}
+
 .address-space-pan {
   align-items: center;
   color: var(--muted);
@@ -1179,6 +1320,7 @@ button {
 }
 
 .addressing-fields code,
+.address-space-region-callout code,
 .address-space-region-label code,
 .address-space-gap-band code,
 .address-space-readout code,
@@ -1195,6 +1337,7 @@ button {
 
 .address-space-gap-band code,
 .address-space-readout code,
+.address-space-region-callout code,
 .address-space-region-label code,
 .address-space-tick code {
   overflow-wrap: normal;

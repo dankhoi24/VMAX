@@ -3,14 +3,24 @@ import { useEffect, useMemo, useState } from "react";
 import type { MemoryRegion } from "../models/addressing";
 
 type RegionRelation = "normal" | "nested" | "overlap";
+type RegionDisplayMode = "full" | "compact" | "marker";
+type GapDisplayMode = "full" | "compact" | "marker";
 
-interface NormalizedRegion {
-  order: number;
-  region: MemoryRegion;
-  start: bigint;
-  end: bigint;
-  size: bigint | null;
-}
+type NormalizedRegion =
+  | {
+      entryKind: "region";
+      order: number;
+      region: MemoryRegion;
+      start: bigint;
+      end: bigint;
+      size: bigint | null;
+    }
+  | {
+      entryKind: "unknown";
+      order: number;
+      region: MemoryRegion;
+      start: bigint;
+    };
 
 interface AddressSpaceRange {
   start: bigint;
@@ -39,7 +49,44 @@ export interface AddressSpaceGapEntry {
   size: bigint;
 }
 
-export type AddressSpaceEntry = AddressSpaceGapEntry | AddressSpaceRegionEntry;
+export interface AddressSpaceUnknownEntry {
+  entryKind: "unknown";
+  region: MemoryRegion;
+  start: bigint;
+}
+
+export type AddressSpaceEntry =
+  | AddressSpaceGapEntry
+  | AddressSpaceRegionEntry
+  | AddressSpaceUnknownEntry;
+
+interface RegionRenderItem {
+  entry: AddressSpaceRegionEntry;
+  bounds: VisibleBounds;
+  displayMode: RegionDisplayMode;
+  isSelected: boolean;
+  laneIndex: number;
+}
+
+interface RegionCluster {
+  entryKind: "cluster";
+  count: number;
+  laneIndex: number;
+  range: AddressSpaceRange;
+  top: number;
+  height: number;
+}
+
+type RegionRenderGroup =
+  | { entryKind: "item"; item: RegionRenderItem }
+  | RegionCluster;
+
+interface VisibleBounds {
+  hitHeight: number;
+  hitTop: number;
+  visualHeight: number;
+  visualTop: number;
+}
 
 interface AddressSpaceMapProps {
   regions: MemoryRegion[];
@@ -50,6 +97,11 @@ interface AddressSpaceMapProps {
 const KIND_LANES: MemoryRegion["kind"][] = ["ram", "reserved", "device"];
 const HITBOX_HEIGHT = 14;
 const MIN_VISUAL_HEIGHT = 1;
+const REGION_COMPACT_HEIGHT = 8;
+const REGION_FULL_HEIGHT = 32;
+const GAP_COMPACT_HEIGHT = 4;
+const GAP_FULL_HEIGHT = 24;
+const CLUSTER_DISTANCE = 14;
 const PLOT_HEIGHT = 520;
 const PLOT_HEIGHT_BIGINT = BigInt(PLOT_HEIGHT);
 
@@ -65,10 +117,20 @@ export function AddressSpaceMap({
   onSelectRegion,
 }: AddressSpaceMapProps) {
   const model = useMemo(() => buildAddressSpaceModel(regions), [regions]);
+  const selectedRegions = useMemo(
+    () =>
+      model.regions.filter(
+        (entry) => entry.region.node_path === selectedNodePath,
+      ),
+    [model.regions, selectedNodePath],
+  );
   const selectedRange = useMemo(
     () => getSelectedRange(model.regions, selectedNodePath),
     [model.regions, selectedNodePath],
   );
+  const [selectedResourceIndex, setSelectedResourceIndex] = useState<
+    number | null
+  >(null);
   const [viewportState, setViewportState] = useState<ViewportState | null>(null);
   const [drag, setDrag] = useState<{
     pointerId: number;
@@ -80,18 +142,29 @@ export function AddressSpaceMap({
     viewportState ?? getFullViewport(model.range),
   );
   const panPercent = getPanPercent(model.range, viewport);
+  const selectedFocusRange = useMemo(
+    () =>
+      selectedResourceIndex !== null && selectedRegions[selectedResourceIndex]
+        ? entryToRange(selectedRegions[selectedResourceIndex])
+        : selectedRange,
+    [selectedRange, selectedRegions, selectedResourceIndex],
+  );
 
   useEffect(() => {
     setViewportState(getFullViewport(model.range));
   }, [model.range.start, model.range.end]);
 
   useEffect(() => {
-    if (selectedRange) {
-      setViewportState(fitRangeViewport(model.range, selectedRange));
-    }
-  }, [model.range, selectedRange]);
+    setSelectedResourceIndex(selectedRegions.length > 1 ? 0 : null);
+  }, [selectedNodePath, selectedRegions.length]);
 
-  if (model.regions.length === 0) {
+  useEffect(() => {
+    if (selectedFocusRange) {
+      setViewportState(fitRangeViewport(model.range, selectedFocusRange));
+    }
+  }, [model.range, selectedFocusRange]);
+
+  if (model.regions.length === 0 && model.unknowns.length === 0) {
     return (
       <p className="addressing-empty-text">
         No CPU physical address regions described.
@@ -104,9 +177,29 @@ export function AddressSpaceMap({
   }
 
   function fitSelected() {
+    if (selectedFocusRange) {
+      setViewportState(fitRangeViewport(model.range, selectedFocusRange));
+    }
+  }
+
+  function fitSelectedNode() {
     if (selectedRange) {
+      setSelectedResourceIndex(null);
       setViewportState(fitRangeViewport(model.range, selectedRange));
     }
+  }
+
+  function fitSelectedResource(index: number) {
+    const region = selectedRegions[index];
+
+    if (region) {
+      setSelectedResourceIndex(index);
+      setViewportState(fitRangeViewport(model.range, entryToRange(region)));
+    }
+  }
+
+  function fitCluster(range: AddressSpaceRange) {
+    setViewportState(fitRangeViewport(model.range, range));
   }
 
   function zoomBy(factor: bigint) {
@@ -177,6 +270,22 @@ export function AddressSpaceMap({
   const visibleRegions = model.regions.filter((region) =>
     intersects(region, viewport),
   );
+  const visibleUnknowns = model.unknowns.filter((entry) =>
+    pointIntersects(entry.start, viewport),
+  );
+  const regionGroups = clusterRegionItems(
+    visibleRegions.map((entry) => {
+      const bounds = getVisibleBounds(entry.start, entry.end, viewport);
+
+      return {
+        bounds,
+        displayMode: getRegionDisplayMode(bounds.visualHeight),
+        entry,
+        isSelected: entry.region.node_path === selectedNodePath,
+        laneIndex: KIND_LANES.indexOf(entry.region.kind),
+      };
+    }),
+  );
   const tickAddresses = getTickAddresses(viewport);
 
   return (
@@ -196,6 +305,39 @@ export function AddressSpaceMap({
           Fit Selected
         </button>
       </div>
+
+      {selectedRegions.length > 1 && (
+        <div
+          className="address-space-resource-controls"
+          aria-label="Selected node address resources"
+        >
+          {selectedRegions.map((region, index) => (
+            <button
+              className={
+                selectedResourceIndex === index
+                  ? "address-space-resource-button address-space-resource-button-active"
+                  : "address-space-resource-button"
+              }
+              key={`${region.region.node_path}:${region.region.start}:${index}`}
+              type="button"
+              onClick={() => fitSelectedResource(index)}
+            >
+              Resource {index}
+            </button>
+          ))}
+          <button
+            className={
+              selectedResourceIndex === null
+                ? "address-space-resource-button address-space-resource-button-active"
+                : "address-space-resource-button"
+            }
+            type="button"
+            onClick={fitSelectedNode}
+          >
+            Fit Node
+          </button>
+        </div>
+      )}
 
       <div className="address-space-window">
         <div className="address-space-readout" aria-label="Visible address range">
@@ -248,15 +390,29 @@ export function AddressSpaceMap({
                 />
               ))}
 
-              {visibleRegions.map((entry, index) => (
-                <AddressSpaceRegion
+              {visibleUnknowns.map((entry, index) => (
+                <AddressSpaceUnknown
                   entry={entry}
-                  isSelected={entry.region.node_path === selectedNodePath}
                   key={`${entry.region.node_path}:${entry.region.start}:${index}`}
-                  onSelectRegion={onSelectRegion}
                   viewport={viewport}
                 />
               ))}
+
+              {regionGroups.map((group, index) =>
+                group.entryKind === "cluster" ? (
+                  <AddressSpaceCluster
+                    cluster={group}
+                    key={`cluster:${group.laneIndex}:${group.range.start}:${index}`}
+                    onFitCluster={fitCluster}
+                  />
+                ) : (
+                  <AddressSpaceRegion
+                    item={group.item}
+                    key={`${group.item.entry.region.node_path}:${group.item.entry.region.start}:${index}`}
+                    onSelectRegion={onSelectRegion}
+                  />
+                ),
+              )}
             </div>
           </div>
         </div>
@@ -292,40 +448,39 @@ function AddressSpaceGap({
   viewport: AddressSpaceRange;
 }) {
   const bounds = getVisibleBounds(gap.start, gap.end, viewport);
+  const displayMode = getGapDisplayMode(bounds.visualHeight);
 
   return (
     <div
-      className="address-space-gap-band"
+      className={`address-space-gap-band address-space-gap-band-${displayMode}`}
       style={{
         height: `${bounds.visualHeight}px`,
         top: `${bounds.visualTop}px`,
       }}
     >
-      <span>GAP</span>
-      <code>
-        {formatHex(gap.start)} - {formatHex(gap.end)}
-      </code>
+      {displayMode !== "marker" && <span>GAP</span>}
+      {displayMode === "full" && (
+        <code>
+          {formatHex(gap.start)} - {formatHex(gap.end)}
+        </code>
+      )}
     </div>
   );
 }
 
 function AddressSpaceRegion({
-  entry,
-  isSelected,
+  item,
   onSelectRegion,
-  viewport,
 }: {
-  entry: AddressSpaceRegionEntry;
-  isSelected: boolean;
+  item: RegionRenderItem;
   onSelectRegion?: (nodePath: string) => void;
-  viewport: AddressSpaceRange;
 }) {
-  const bounds = getVisibleBounds(entry.start, entry.end, viewport);
-  const laneIndex = KIND_LANES.indexOf(entry.region.kind);
+  const { bounds, displayMode, entry, isSelected, laneIndex } = item;
   const className = [
     "address-space-region-hitbox",
     `address-space-region-hitbox-${entry.region.kind}`,
     `address-space-region-hitbox-${entry.relation}`,
+    `address-space-region-hitbox-${displayMode}`,
     isSelected ? "address-space-region-hitbox-selected" : "",
   ]
     .filter(Boolean)
@@ -360,15 +515,83 @@ function AddressSpaceRegion({
           top: `${bounds.visualTop - bounds.hitTop}px`,
         }}
       />
-      <span className="address-space-region-label">
-        <strong>{REGION_LABELS[entry.region.kind]}</strong>
-        <code>{entry.region.node_path}</code>
-        {entry.relation !== "normal" && <em>{entry.relation}</em>}
-      </span>
-      <small>
-        {entry.region.start} - {entry.region.end ?? "-"}
-      </small>
+      {displayMode !== "marker" && (
+        <span className="address-space-region-label">
+          <strong>{REGION_LABELS[entry.region.kind]}</strong>
+          {displayMode === "full" && <code>{entry.region.node_path}</code>}
+          {entry.relation !== "normal" && <em>{entry.relation}</em>}
+        </span>
+      )}
+      {displayMode === "full" && (
+        <small>
+          {entry.region.start} - {entry.region.end ?? "-"}
+        </small>
+      )}
+      {displayMode === "marker" && (
+        <span className="address-space-region-callout">
+          <strong>{entry.region.node_path}</strong>
+          <code>
+            {entry.region.start} - {entry.region.end ?? "-"}
+          </code>
+          <span>Size: {entry.region.size ?? "-"}</span>
+        </span>
+      )}
     </button>
+  );
+}
+
+function AddressSpaceCluster({
+  cluster,
+  onFitCluster,
+}: {
+  cluster: RegionCluster;
+  onFitCluster: (range: AddressSpaceRange) => void;
+}) {
+  return (
+    <button
+      className="address-space-cluster"
+      type="button"
+      style={{
+        height: `${cluster.height}px`,
+        left: getLaneLeft(cluster.laneIndex),
+        top: `${cluster.top}px`,
+        width: "calc(33.333333% - 4px)",
+      }}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        onFitCluster(cluster.range);
+      }}
+      aria-label={`Zoom into ${cluster.count} address regions`}
+      title={`${cluster.count} regions\n${formatHex(cluster.range.start)} - ${formatHex(cluster.range.end)}`}
+    >
+      +{cluster.count}
+    </button>
+  );
+}
+
+function AddressSpaceUnknown({
+  entry,
+  viewport,
+}: {
+  entry: AddressSpaceUnknownEntry;
+  viewport: AddressSpaceRange;
+}) {
+  const top = getAddressY(entry.start, viewport);
+  const laneIndex = KIND_LANES.indexOf(entry.region.kind);
+
+  return (
+    <div
+      className={`address-space-unknown address-space-unknown-${entry.region.kind}`}
+      style={{
+        left: getLaneLeft(laneIndex),
+        top: `${top}px`,
+        width: "calc(33.333333% - 4px)",
+      }}
+      title={`${entry.region.node_path}\n${entry.region.start} - unknown`}
+    >
+      <span>unknown</span>
+    </div>
   );
 }
 
@@ -380,16 +603,40 @@ function buildAddressSpaceModel(regions: MemoryRegion[]) {
   const entries: AddressSpaceEntry[] = [];
   const gaps: AddressSpaceGapEntry[] = [];
   const regionEntries: AddressSpaceRegionEntry[] = [];
+  const unknownEntries: AddressSpaceUnknownEntry[] = [];
   let coverageEnd: bigint | null = null;
+  let coverageUnknown = false;
 
   for (const item of normalized) {
+    if (item.entryKind === "unknown") {
+      if (coverageEnd === null && !coverageUnknown && item.start > 0n) {
+        addGap(0n, item.start - 1n);
+      } else if (
+        coverageEnd !== null &&
+        !coverageUnknown &&
+        item.start > coverageEnd + 1n
+      ) {
+        addGap(coverageEnd + 1n, item.start - 1n);
+      }
+
+      const unknownEntry: AddressSpaceUnknownEntry = {
+        entryKind: "unknown",
+        region: item.region,
+        start: item.start,
+      };
+      entries.push(unknownEntry);
+      unknownEntries.push(unknownEntry);
+      coverageUnknown = true;
+      continue;
+    }
+
     let relation: RegionRelation = "normal";
 
     if (coverageEnd === null) {
-      if (item.start > 0n) {
+      if (!coverageUnknown && item.start > 0n) {
         addGap(0n, item.start - 1n);
       }
-    } else if (item.start > coverageEnd + 1n) {
+    } else if (!coverageUnknown && item.start > coverageEnd + 1n) {
       addGap(coverageEnd + 1n, item.start - 1n);
     } else if (item.start <= coverageEnd) {
       relation = item.end <= coverageEnd ? "nested" : "overlap";
@@ -413,12 +660,14 @@ function buildAddressSpaceModel(regions: MemoryRegion[]) {
   }
 
   const range = getModelRange(regionEntries);
+  const fullRange = includeUnknownsInRange(range, unknownEntries);
 
   return {
     entries,
     gaps,
-    range,
+    range: fullRange,
     regions: regionEntries,
+    unknowns: unknownEntries,
   };
 
   function addGap(start: bigint, end: bigint) {
@@ -451,11 +700,21 @@ function normalizeRegion(
       ? null
       : start + parsedSize - 1n);
 
-  if (end === null || end < start) {
+  if (end === null) {
+    return {
+      entryKind: "unknown",
+      order,
+      region,
+      start,
+    };
+  }
+
+  if (end < start) {
     return null;
   }
 
   return {
+    entryKind: "region",
     order,
     region,
     start,
@@ -474,8 +733,10 @@ function compareNormalizedRegions(
   if (left.start > right.start) {
     return 1;
   }
-  if (left.end !== right.end) {
-    return left.end > right.end ? -1 : 1;
+  const leftEnd = left.entryKind === "region" ? left.end : left.start;
+  const rightEnd = right.entryKind === "region" ? right.end : right.start;
+  if (leftEnd !== rightEnd) {
+    return leftEnd > rightEnd ? -1 : 1;
   }
 
   return left.order - right.order;
@@ -491,6 +752,30 @@ function getModelRange(regions: AddressSpaceRegionEntry[]): AddressSpaceRange {
   const end = regions.reduce(
     (current, region) => (region.end > current ? region.end : current),
     start,
+  );
+
+  return {
+    start,
+    end,
+    span: end - start + 1n,
+  };
+}
+
+function includeUnknownsInRange(
+  range: AddressSpaceRange,
+  unknowns: AddressSpaceUnknownEntry[],
+): AddressSpaceRange {
+  if (unknowns.length === 0) {
+    return range;
+  }
+
+  const start = unknowns.reduce(
+    (current, entry) => (entry.start < current ? entry.start : current),
+    range.start,
+  );
+  const end = unknowns.reduce(
+    (current, entry) => (entry.start > current ? entry.start : current),
+    range.end,
   );
 
   return {
@@ -525,6 +810,14 @@ function getSelectedRange(
     start,
     end,
     span: end - start + 1n,
+  };
+}
+
+function entryToRange(entry: AddressSpaceRegionEntry): AddressSpaceRange {
+  return {
+    start: entry.start,
+    end: entry.end,
+    span: entry.end - entry.start + 1n,
   };
 }
 
@@ -610,6 +903,126 @@ function getPanPercent(
   return Number(((viewport.start - fullRange.start) * 1000n) / available);
 }
 
+function clusterRegionItems(items: RegionRenderItem[]): RegionRenderGroup[] {
+  const groups: RegionRenderGroup[] = [];
+
+  for (const laneIndex of [0, 1, 2]) {
+    const laneItems = items
+      .filter((item) => item.laneIndex === laneIndex)
+      .sort((left, right) => left.bounds.visualTop - right.bounds.visualTop);
+    let pending: RegionRenderItem[] = [];
+
+    for (const item of laneItems) {
+      if (shouldCluster(item)) {
+        const last = pending[pending.length - 1];
+        if (
+          pending.length > 0 &&
+          item.bounds.visualTop - getClusterBottom(pending) <= CLUSTER_DISTANCE
+        ) {
+          pending.push(item);
+          continue;
+        }
+
+        flushPending();
+        pending = [item];
+        continue;
+      }
+
+      flushPending();
+      groups.push({ entryKind: "item", item });
+    }
+
+    flushPending();
+
+    function flushPending() {
+      if (pending.length === 0) {
+        return;
+      }
+
+      if (pending.length === 1) {
+        groups.push({ entryKind: "item", item: pending[0] });
+      } else {
+        groups.push(buildCluster(laneIndex, pending));
+      }
+
+      pending = [];
+    }
+  }
+
+  return groups.sort((left, right) => getGroupTop(left) - getGroupTop(right));
+}
+
+function shouldCluster(item: RegionRenderItem): boolean {
+  return item.displayMode === "marker" && !item.isSelected;
+}
+
+function buildCluster(
+  laneIndex: number,
+  items: RegionRenderItem[],
+): RegionCluster {
+  const start = items.reduce(
+    (current, item) => (item.entry.start < current ? item.entry.start : current),
+    items[0].entry.start,
+  );
+  const end = items.reduce(
+    (current, item) => (item.entry.end > current ? item.entry.end : current),
+    items[0].entry.end,
+  );
+  const top = items.reduce(
+    (current, item) =>
+      item.bounds.hitTop < current ? item.bounds.hitTop : current,
+    items[0].bounds.hitTop,
+  );
+  const bottom = items.reduce((current, item) => {
+    const itemBottom = item.bounds.hitTop + item.bounds.hitHeight;
+    return itemBottom > current ? itemBottom : current;
+  }, items[0].bounds.hitTop + items[0].bounds.hitHeight);
+
+  return {
+    count: items.length,
+    entryKind: "cluster",
+    height: Math.max(HITBOX_HEIGHT, bottom - top),
+    laneIndex,
+    range: {
+      start,
+      end,
+      span: end - start + 1n,
+    },
+    top,
+  };
+}
+
+function getClusterBottom(items: RegionRenderItem[]): number {
+  return items.reduce((current, item) => {
+    const bottom = item.bounds.hitTop + item.bounds.hitHeight;
+    return bottom > current ? bottom : current;
+  }, 0);
+}
+
+function getGroupTop(group: RegionRenderGroup): number {
+  return group.entryKind === "cluster" ? group.top : group.item.bounds.hitTop;
+}
+
+function getRegionDisplayMode(height: number): RegionDisplayMode {
+  if (height >= REGION_FULL_HEIGHT) {
+    return "full";
+  }
+  if (height >= REGION_COMPACT_HEIGHT) {
+    return "compact";
+  }
+  return "marker";
+}
+
+function getGapDisplayMode(height: number): GapDisplayMode {
+  if (height >= GAP_FULL_HEIGHT) {
+    return "full";
+  }
+  if (height >= GAP_COMPACT_HEIGHT) {
+    return "compact";
+  }
+  return "marker";
+}
+
 function getVisibleBounds(
   start: bigint,
   end: bigint,
@@ -658,10 +1071,14 @@ function getTickAddresses(viewport: AddressSpaceRange): bigint[] {
 }
 
 function intersects(
-  entry: Pick<AddressSpaceEntry, "start" | "end">,
+  entry: Pick<AddressSpaceGapEntry | AddressSpaceRegionEntry, "start" | "end">,
   viewport: AddressSpaceRange,
 ): boolean {
   return entry.start <= viewport.end && entry.end >= viewport.start;
+}
+
+function pointIntersects(point: bigint, viewport: AddressSpaceRange): boolean {
+  return point >= viewport.start && point <= viewport.end;
 }
 
 function parseAddress(value: string | null): bigint | null {

@@ -71,7 +71,7 @@ class MemoryRegionClassifierTest(unittest.TestCase):
         self.assertEqual(region.start, 0x40000000)
         self.assertEqual(region.end, 0x43FFFFFF)
 
-    def test_classifies_nested_reserved_memory_descendant_as_reserved(self) -> None:
+    def test_does_not_auto_classify_nested_reserved_descendant_as_reserved(self) -> None:
         region, warnings = self.classifier.classify(
             translated_range(
                 node_path="/reserved-memory/vendor/camera@40000000",
@@ -82,7 +82,7 @@ class MemoryRegionClassifierTest(unittest.TestCase):
         )
 
         self.assertEqual(warnings, ())
-        self.assertEqual(region.kind, MemoryRegionKind.RESERVED)
+        self.assertEqual(region.kind, MemoryRegionKind.DEVICE)
 
     def test_classifies_translated_device_resource_as_device(self) -> None:
         region, warnings = self.classifier.classify(
@@ -212,6 +212,33 @@ class MemoryRegionClassifierTest(unittest.TestCase):
                 ("/memory@0", MemoryRegionKind.RAM),
                 ("/reserved-memory/cma@80000000", MemoryRegionKind.RESERVED),
                 ("/soc/uart@1000", MemoryRegionKind.DEVICE),
+            ],
+        )
+
+    def test_classifies_same_memory_node_multiple_ranges_as_ram(self) -> None:
+        regions, warnings = self.classifier.classify_many(
+            (
+                translated_range(
+                    node_path="/memory@0",
+                    bus_address=0,
+                    cpu_address=0,
+                    size=0x80000000,
+                ),
+                translated_range(
+                    node_path="/memory@0",
+                    bus_address=0x1_00000000,
+                    cpu_address=0x1_00000000,
+                    size=0x40000000,
+                ),
+            )
+        )
+
+        self.assertEqual(warnings, ())
+        self.assertEqual(
+            [(region.kind, region.start, region.size) for region in regions],
+            [
+                (MemoryRegionKind.RAM, 0x0, 0x80000000),
+                (MemoryRegionKind.RAM, 0x1_00000000, 0x40000000),
             ],
         )
 

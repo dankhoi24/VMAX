@@ -70,7 +70,7 @@ def _classify_kind(
     if _is_root_memory_node(node_path):
         return MemoryRegionKind.RAM, None
 
-    if node_path.startswith(f"{RESERVED_MEMORY_PATH}/"):
+    if _is_reserved_memory_region_node(node_path):
         return MemoryRegionKind.RESERVED, None
 
     if node_path in ("/", RESERVED_MEMORY_PATH):
@@ -90,3 +90,12 @@ def _is_root_memory_node(node_path: str) -> bool:
 
     segment = segments[0]
     return segment == "memory" or segment.startswith("memory@")
+
+
+def _is_reserved_memory_region_node(node_path: str) -> bool:
+    prefix = f"{RESERVED_MEMORY_PATH}/"
+    if not node_path.startswith(prefix):
+        return False
+
+    remainder = node_path[len(prefix) :]
+    return bool(remainder) and "/" not in remainder

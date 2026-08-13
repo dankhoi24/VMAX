@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { AddressingPanel } from "./AddressingPanel";
@@ -114,12 +114,18 @@ describe("AddressingPanel", () => {
     expect(screen.getByText("Region")).toBeTruthy();
     expect(screen.getAllByText("device")).toHaveLength(2);
     expect(screen.getAllByText("0x107d001000").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("0x107d002000").length).toBeGreaterThan(0);
-    expect(screen.getByText("Resource 0")).toBeTruthy();
-    expect(screen.getByText("Resource 1")).toBeTruthy();
+    expect(screen.queryByText("0x2000")).toBeNull();
+    expect(screen.getAllByText("Resource 0").length).toBeGreaterThan(0);
+    expect(screen.getByRole("tab", { name: "Resource 1" })).toBeTruthy();
     expect(screen.getByText("/soc")).toBeTruthy();
     expect(screen.getByText("ranges[0]")).toBeTruthy();
-    expect(screen.getByText("0x1000 -> 0x107d001000")).toBeTruthy();
+    expect(screen.getAllByText("Bus address").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("CPU address").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Resource 1" }));
+
+    expect(screen.getAllByText("0x107d002000").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("0x2000").length).toBeGreaterThan(0);
   });
 
   it("renders mappings for the selected bus node", () => {

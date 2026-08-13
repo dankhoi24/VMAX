@@ -201,7 +201,9 @@ describe("App", () => {
     expect(screen.getByText("Region")).toBeTruthy();
     expect(screen.getByText("device")).toBeTruthy();
     expect(screen.getAllByText("0x107d001000").length).toBeGreaterThan(0);
-    expect(screen.getByText("0x1000 -> 0x107d001000")).toBeTruthy();
+    expect(screen.getAllByText("Bus address").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("CPU address").length).toBeGreaterThan(0);
+    expect(screen.getByText("ranges[0]")).toBeTruthy();
   });
 
   it("renders the Device Tree before delayed addressing data resolves", async () => {

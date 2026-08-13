@@ -1,13 +1,15 @@
+import { useEffect, useState } from "react";
+
 import type {
   AddressingReport,
   AddressingWarning,
   MemoryRegion,
   RangeMapping,
   TranslatedAddressRange,
-  TranslationStep,
 } from "../models/addressing";
 import type { DeviceTreeNode } from "../models/devicetree";
 import { AddressingIcon, WarningIcon } from "./icons";
+import { TranslationTrace } from "./TranslationTrace";
 
 export type AddressingPanelState =
   | { status: "idle" }
@@ -99,15 +101,7 @@ export function AddressingPanel({ node, state }: AddressingPanelProps) {
       {details.translations.length > 0 && (
         <section className="addressing-section" aria-labelledby="translations-heading">
           <SectionHeading id="translations-heading" title="Translation" />
-          <ul className="addressing-list">
-            {details.translations.map((translation, index) => (
-              <TranslationItem
-                key={`${translation.node_path}:${translation.bus_address}:${index}`}
-                translation={translation}
-                index={index}
-              />
-            ))}
-          </ul>
+          <TranslationSection translations={details.translations} />
         </section>
       )}
 
@@ -200,16 +194,79 @@ function MemoryRegionItem({ region, index }: MemoryRegionItemProps) {
   );
 }
 
-interface TranslationItemProps {
+interface TranslationSectionProps {
+  translations: TranslatedAddressRange[];
+}
+
+function TranslationSection({ translations }: TranslationSectionProps) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const activeIndex = Math.min(selectedIndex, translations.length - 1);
+  const activeTranslation = translations[activeIndex];
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [translations]);
+
+  if (!activeTranslation) {
+    return null;
+  }
+
+  return (
+    <div className="translation-resource-view">
+      {translations.length > 1 && (
+        <div
+          className="translation-resource-tabs"
+          role="tablist"
+          aria-label="Address resources"
+        >
+          {translations.map((translation, index) => (
+            <button
+              className={
+                activeIndex === index
+                  ? "translation-resource-tab translation-resource-tab-active"
+                  : "translation-resource-tab"
+              }
+              key={`${translation.node_path}:${translation.bus_address}:${index}`}
+              type="button"
+              role="tab"
+              aria-selected={activeIndex === index}
+              onClick={() => setSelectedIndex(index)}
+            >
+              Resource {index}
+            </button>
+          ))}
+        </div>
+      )}
+      <TranslationResourceCard
+        translation={activeTranslation}
+        index={activeIndex}
+      />
+    </div>
+  );
+}
+
+interface TranslationResourceCardProps {
   translation: TranslatedAddressRange;
   index: number;
 }
 
-function TranslationItem({ translation, index }: TranslationItemProps) {
+function TranslationResourceCard({
+  translation,
+  index,
+}: TranslationResourceCardProps) {
   return (
-    <li className="addressing-card">
+    <div className="translation-card">
       <div className="addressing-card-header">
         <span>Resource {index}</span>
+        <span
+          className={
+            translation.cpu_address === null
+              ? "translation-status translation-status-unresolved"
+              : "translation-status translation-status-resolved"
+          }
+        >
+          {translation.cpu_address === null ? "unresolved" : "resolved"}
+        </span>
       </div>
       <AddressingFields
         fields={[
@@ -219,36 +276,8 @@ function TranslationItem({ translation, index }: TranslationItemProps) {
           ["End", translation.end],
         ]}
       />
-      {translation.translation_path.length > 0 && (
-        <ol className="translation-step-list">
-          {translation.translation_path.map((step, stepIndex) => (
-            <TranslationStepItem
-              key={`${step.bus_node_path}:${stepIndex}`}
-              step={step}
-            />
-          ))}
-        </ol>
-      )}
-    </li>
-  );
-}
-
-interface TranslationStepItemProps {
-  step: TranslationStep;
-}
-
-function TranslationStepItem({ step }: TranslationStepItemProps) {
-  const mappingLabel =
-    step.mapping_index === null ? "identity" : `ranges[${step.mapping_index}]`;
-
-  return (
-    <li>
-      <code>{step.bus_node_path}</code>
-      <span>{mappingLabel}</span>
-      <code>
-        {step.input_address} -&gt; {step.output_address}
-      </code>
-    </li>
+      <TranslationTrace translation={translation} />
+    </div>
   );
 }
 

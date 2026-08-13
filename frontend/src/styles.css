@@ -85,6 +85,7 @@ button {
 .panel-icon,
 .search-clear-icon,
 .search-input-icon,
+.trace-endpoint-icon,
 .tree-node-icon,
 .warning-icon {
   fill: none;
@@ -99,6 +100,7 @@ button {
 .panel-icon,
 .search-clear-icon,
 .search-input-icon,
+.trace-endpoint-icon,
 .tree-node-icon,
 .warning-icon {
   flex: 0 0 auto;
@@ -282,6 +284,7 @@ button {
 .search-result-button:focus-visible,
 .search-clear-button:focus-visible,
 .inspector-tab:focus-visible,
+.translation-resource-tab:focus-visible,
 .tree-node-button:focus-visible,
 .tree-toggle:focus-visible,
 .reload-button:focus-visible,
@@ -785,11 +788,52 @@ button {
   padding: 0;
 }
 
+.translation-resource-view {
+  display: grid;
+  gap: 10px;
+}
+
+.translation-resource-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.translation-resource-tab {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 30px;
+  padding: 5px 9px;
+}
+
+.translation-resource-tab:hover {
+  background: var(--accent-wash);
+  color: var(--accent-strong);
+}
+
+.translation-resource-tab-active,
+.translation-resource-tab-active:hover {
+  background: var(--accent-soft);
+  border-color: var(--border-strong);
+  color: var(--accent-strong);
+}
+
 .addressing-card {
   background: var(--surface-tint);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px;
+}
+
+.translation-card {
+  display: grid;
+  gap: 10px;
 }
 
 .addressing-card-header {
@@ -830,7 +874,9 @@ button {
 }
 
 .addressing-fields code,
-.translation-step-list code,
+.trace-address-pair code,
+.trace-endpoint code,
+.trace-step-header code,
 .addressing-warning code {
   color: var(--text);
   font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
@@ -838,24 +884,159 @@ button {
   overflow-wrap: anywhere;
 }
 
-.translation-step-list {
-  border-top: 1px solid var(--border);
-  display: grid;
-  gap: 8px;
-  margin: 10px 0 0;
-  padding: 10px 0 0 20px;
+.translation-status,
+.trace-mapping {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 1px 7px;
+  text-transform: uppercase;
 }
 
-.translation-step-list li {
+.translation-status-resolved {
+  background: #e7f7ec;
+  border: 1px solid #bfe6cb;
+  color: #217447;
+}
+
+.translation-status-unresolved {
+  background: #fff4da;
+  border: 1px solid #f3d99a;
+  color: #8a5a00;
+}
+
+.translation-trace {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 0;
+  margin: 10px 0 0;
+  padding-top: 10px;
+}
+
+.trace-endpoint {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 16px 86px minmax(0, 1fr);
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.trace-endpoint span {
   color: var(--muted);
   font-size: 12px;
 }
 
-.translation-step-list span {
+.trace-endpoint-source {
+  border-color: var(--border-strong);
+}
+
+.trace-endpoint-target {
+  background: #eefbf3;
+  border-color: #bfe6cb;
+}
+
+.trace-endpoint-unresolved {
+  background: #fff8e8;
+  border-color: #f3d99a;
+}
+
+.trace-endpoint-icon {
   color: var(--accent-strong);
-  display: block;
+  height: 16px;
+  width: 16px;
+}
+
+.trace-endpoint-unresolved .trace-endpoint-icon {
+  color: #a16207;
+}
+
+.trace-step {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  min-height: 58px;
+}
+
+.trace-rail {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.trace-rail::before {
+  background: var(--border-strong);
+  bottom: 0;
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 1px;
+}
+
+.trace-rail span {
+  align-items: center;
+  background: var(--accent-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--accent-strong);
+  display: inline-flex;
+  font-size: 11px;
   font-weight: 700;
-  margin: 2px 0;
+  height: 20px;
+  justify-content: center;
+  position: relative;
+  width: 20px;
+  z-index: 1;
+}
+
+.trace-step-card {
+  align-self: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 7px;
+  margin: 8px 0;
+  padding: 9px 10px;
+}
+
+.trace-step-card-direct {
+  background: #f7fbff;
+}
+
+.trace-step-header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.trace-mapping {
+  background: #eaf2ff;
+  border: 1px solid #bfd7f5;
+  color: #245b95;
+}
+
+.trace-mapping-identity {
+  background: #f2f4f7;
+  border-color: #d0d5dd;
+  color: #667085;
+}
+
+.trace-address-pair {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
+}
+
+.trace-address-pair span {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
 }
 
 .region-kind {
@@ -942,6 +1123,22 @@ button {
   .property-fields div,
   .addressing-fields div {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .trace-endpoint {
+    grid-template-columns: 16px minmax(0, 1fr);
+  }
+
+  .trace-endpoint code {
+    grid-column: 2;
+  }
+
+  .trace-address-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .trace-address-pair span {
+    text-align: left;
   }
 
   .metadata-row dd,

@@ -127,7 +127,7 @@ class MemoryRegionClassifierTest(unittest.TestCase):
         self.assertEqual(region.start, 0x107D001000)
         self.assertEqual(region.end, 0x107D001FFF)
 
-    def test_preserves_unknown_size_without_fabricating_end(self) -> None:
+    def test_size_less_reg_is_not_classified_as_memory_region(self) -> None:
         region, warnings = self.classifier.classify(
             translated_range(
                 node_path="/cpus/cpu@0",
@@ -137,10 +137,27 @@ class MemoryRegionClassifierTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(warnings, ())
-        self.assertEqual(region.kind, MemoryRegionKind.DEVICE)
-        self.assertIsNone(region.size)
-        self.assertIsNone(region.end)
+        self.assertIsNone(region)
+        self.assertEqual(
+            [warning.code for warning in warnings],
+            ["NON_MEMORY_REG_SEMANTICS"],
+        )
+
+    def test_zero_size_device_reg_is_not_classified_as_memory_region(self) -> None:
+        region, warnings = self.classifier.classify(
+            translated_range(
+                node_path="/soc/device@1000",
+                bus_address=0x1000,
+                cpu_address=0x107D001000,
+                size=0,
+            )
+        )
+
+        self.assertIsNone(region)
+        self.assertEqual(
+            [warning.code for warning in warnings],
+            ["NON_MEMORY_REG_SEMANTICS"],
+        )
 
     def test_unresolved_translation_creates_no_memory_region(self) -> None:
         source_warning = AddressingWarning(

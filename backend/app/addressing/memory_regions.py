@@ -38,6 +38,21 @@ class MemoryRegionClassifier:
             warnings.append(unsupported_warning)
             return None, tuple(warnings)
 
+        if kind is MemoryRegionKind.DEVICE and (
+            translated_range.size is None or translated_range.size == 0
+        ):
+            warnings.append(
+                AddressingWarning(
+                    code="NON_MEMORY_REG_SEMANTICS",
+                    node_path=translated_range.node_path,
+                    message=(
+                        "Cannot classify a size-less reg resource as a "
+                        "device memory region"
+                    ),
+                )
+            )
+            return None, tuple(warnings)
+
         return (
             MemoryRegion(
                 node_path=translated_range.node_path,

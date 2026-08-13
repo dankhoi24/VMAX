@@ -22,25 +22,25 @@ class AddressingWarningResponse(BaseModel):
 class RangeMappingResponse(BaseModel):
     node_path: str
     index: int
-    child_address: int
-    parent_address: int
-    size: int
+    child_address: str
+    parent_address: str
+    size: str
     source_property: str
 
 
 class TranslationStepResponse(BaseModel):
     bus_node_path: str
-    input_address: int
-    output_address: int
+    input_address: str
+    output_address: str
     mapping_index: int | None
 
 
 class TranslatedAddressRangeResponse(BaseModel):
     node_path: str
-    bus_address: int
-    cpu_address: int | None
-    size: int | None
-    end: int | None
+    bus_address: str
+    cpu_address: str | None
+    size: str | None
+    end: str | None
     translation_path: list[TranslationStepResponse]
     warnings: list[AddressingWarningResponse]
 
@@ -48,9 +48,9 @@ class TranslatedAddressRangeResponse(BaseModel):
 class MemoryRegionResponse(BaseModel):
     node_path: str
     kind: MemoryRegionKind
-    start: int
-    size: int | None
-    end: int | None
+    start: str
+    size: str | None
+    end: str | None
 
 
 class AddressingReportResponse(BaseModel):
@@ -76,9 +76,9 @@ def _memory_region_to_response(region: MemoryRegion) -> MemoryRegionResponse:
     return MemoryRegionResponse(
         node_path=region.node_path,
         kind=region.kind,
-        start=region.start,
-        size=region.size,
-        end=region.end,
+        start=_hex(region.start),
+        size=_hex(region.size),
+        end=_hex(region.end),
     )
 
 
@@ -86,9 +86,9 @@ def _range_mapping_to_response(mapping: RangeMapping) -> RangeMappingResponse:
     return RangeMappingResponse(
         node_path=mapping.node_path,
         index=mapping.index,
-        child_address=mapping.child_address,
-        parent_address=mapping.parent_address,
-        size=mapping.size,
+        child_address=_hex(mapping.child_address),
+        parent_address=_hex(mapping.parent_address),
+        size=_hex(mapping.size),
         source_property=mapping.source_property,
     )
 
@@ -98,10 +98,10 @@ def _translated_range_to_response(
 ) -> TranslatedAddressRangeResponse:
     return TranslatedAddressRangeResponse(
         node_path=translated_range.node_path,
-        bus_address=translated_range.bus_address,
-        cpu_address=translated_range.cpu_address,
-        size=translated_range.size,
-        end=translated_range.end,
+        bus_address=_hex(translated_range.bus_address),
+        cpu_address=_hex(translated_range.cpu_address),
+        size=_hex(translated_range.size),
+        end=_hex(translated_range.end),
         translation_path=[
             _translation_step_to_response(step)
             for step in translated_range.translation_path
@@ -116,8 +116,8 @@ def _translated_range_to_response(
 def _translation_step_to_response(step: TranslationStep) -> TranslationStepResponse:
     return TranslationStepResponse(
         bus_node_path=step.bus_node_path,
-        input_address=step.input_address,
-        output_address=step.output_address,
+        input_address=_hex(step.input_address),
+        output_address=_hex(step.output_address),
         mapping_index=step.mapping_index,
     )
 
@@ -128,3 +128,9 @@ def _warning_to_response(warning: AddressingWarning) -> AddressingWarningRespons
         node_path=warning.node_path,
         message=warning.message,
     )
+
+
+def _hex(value: int | None) -> str | None:
+    if value is None:
+        return None
+    return f"0x{value:x}"

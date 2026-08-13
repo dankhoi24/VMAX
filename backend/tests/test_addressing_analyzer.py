@@ -118,7 +118,6 @@ class AddressingAnalyzerTest(unittest.TestCase):
             properties=(
                 cells("#address-cells", 1),
                 cells("#size-cells", 0),
-                ranges(),
             ),
             children=(cpu,),
         )
@@ -132,9 +131,8 @@ class AddressingAnalyzerTest(unittest.TestCase):
         report = self.analyzer.analyze(DeviceTree(root=root))
 
         self.assertEqual(report.regions, ())
-        self.assertEqual(len(report.translations), 1)
-        self.assertEqual(report.translations[0].node_path, "/cpus/cpu@0")
-        self.assertEqual(report.translations[0].cpu_address, 0)
+        self.assertEqual(report.translations, ())
+        self.assertEqual(report.mappings, ())
         self.assertEqual(
             [warning.code for warning in report.warnings],
             ["NON_MEMORY_REG_SEMANTICS"],

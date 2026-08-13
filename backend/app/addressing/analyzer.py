@@ -13,6 +13,7 @@ from app.model.addressing import (
     AddressingWarning,
     MemoryRegion,
     RangeMapping,
+    RegRegion,
     TranslatedAddressRange,
 )
 from app.model.devicetree import DeviceTree, DeviceTreeNode
@@ -61,6 +62,10 @@ class AddressingAnalyzer:
             warnings.extend(reg_warnings)
 
             for reg_region in reg_regions:
+                if _is_sizeless_reg_region(reg_region):
+                    warnings.append(_non_memory_reg_semantics_warning(node))
+                    continue
+
                 translated = self._ranges_translator.translate(reg_region, node, tree)
                 translations.append(translated)
 
@@ -99,6 +104,18 @@ class AddressingAnalyzer:
             return (), warnings
 
         return mappings, warnings
+
+
+def _is_sizeless_reg_region(reg_region: RegRegion) -> bool:
+    return reg_region.size is None or reg_region.size == 0
+
+
+def _non_memory_reg_semantics_warning(node: DeviceTreeNode) -> AddressingWarning:
+    return AddressingWarning(
+        code="NON_MEMORY_REG_SEMANTICS",
+        node_path=node.path,
+        message="Size-less reg resource is not treated as an address range",
+    )
 
 
 def _deduplicate_warnings(

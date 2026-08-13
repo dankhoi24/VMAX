@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
+import type { AddressingReport } from "./models/addressing";
 import type { DeviceTreeResponse } from "./models/devicetree";
 
 afterEach(() => {
@@ -65,6 +66,47 @@ const tree: DeviceTreeResponse = {
   },
 };
 
+const addressingReport: AddressingReport = {
+  regions: [
+    {
+      node_path: "/soc@107c000000/uart@1000",
+      kind: "device",
+      start: "0x107d001000",
+      size: "0x100",
+      end: "0x107d0010ff",
+    },
+  ],
+  mappings: [
+    {
+      node_path: "/soc@107c000000",
+      index: 0,
+      child_address: "0x0",
+      parent_address: "0x107d000000",
+      size: "0x100000",
+      source_property: "ranges",
+    },
+  ],
+  translations: [
+    {
+      node_path: "/soc@107c000000/uart@1000",
+      bus_address: "0x1000",
+      cpu_address: "0x107d001000",
+      size: "0x100",
+      end: "0x107d0010ff",
+      translation_path: [
+        {
+          bus_node_path: "/soc@107c000000",
+          input_address: "0x1000",
+          output_address: "0x107d001000",
+          mapping_index: 0,
+        },
+      ],
+      warnings: [],
+    },
+  ],
+  warnings: [],
+};
+
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     headers: {
@@ -73,13 +115,29 @@ function jsonResponse(body: unknown): Response {
   });
 }
 
+function stubApi(): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/devicetree")) {
+        return jsonResponse(tree);
+      }
+      if (url.endsWith("/api/v1/addressing")) {
+        return jsonResponse(addressingReport);
+      }
+      return new Response("", { status: 404, statusText: "Not Found" });
+    }),
+  );
+}
+
 describe("App", () => {
   it("shows the selected node details after clicking a tree node", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(tree)));
+    stubApi();
 
     render(<App />);
 
-    expect(await screen.findByText("Properties")).toBeTruthy();
+    expect(await screen.findByRole("tab", { name: "Properties" })).toBeTruthy();
     expect(screen.queryByText("compatible")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "soc@107c000000" }));
@@ -90,11 +148,11 @@ describe("App", () => {
   });
 
   it("selects a search result and expands its ancestor path", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(tree)));
+    stubApi();
 
     render(<App />);
 
-    expect(await screen.findByText("Properties")).toBeTruthy();
+    expect(await screen.findByRole("tab", { name: "Properties" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^uart@1000$/ })).toBeNull();
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Search Device Tree" }), {
@@ -109,5 +167,22 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: /^uart@1000$/ })).toBeTruthy();
     expect(screen.getByText("clock-frequency")).toBeTruthy();
     expect(screen.getByText("[24000000]")).toBeTruthy();
+  });
+
+  it("shows addressing data for the selected node", async () => {
+    stubApi();
+
+    render(<App />);
+
+    expect(await screen.findByRole("tab", { name: "Properties" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle soc@107c000000" }));
+    fireEvent.click(screen.getByRole("button", { name: /^uart@1000$/ }));
+    fireEvent.click(screen.getByRole("tab", { name: "Addressing" }));
+
+    expect(screen.getByText("Region")).toBeTruthy();
+    expect(screen.getByText("device")).toBeTruthy();
+    expect(screen.getAllByText("0x107d001000").length).toBeGreaterThan(0);
+    expect(screen.getByText("0x1000 -> 0x107d001000")).toBeTruthy();
   });
 });

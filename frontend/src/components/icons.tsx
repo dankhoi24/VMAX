@@ -2,6 +2,17 @@ interface IconProps {
   className?: string;
 }
 
+export function AddressingIcon({ className }: IconProps) {
+  return (
+    <svg className={className} aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M5 12h14" />
+      <path d="m15 8 4 4-4 4" />
+      <path d="M5 6h4" />
+      <path d="M5 18h4" />
+    </svg>
+  );
+}
+
 export function CheckIcon({ className }: IconProps) {
   return (
     <svg className={className} aria-hidden="true" viewBox="0 0 24 24">
@@ -67,6 +78,16 @@ export function TreeIcon({ className }: IconProps) {
       <path d="M6 14h12" />
       <path d="M12 10h6v4" />
       <path d="M12 10H6v4" />
+    </svg>
+  );
+}
+
+export function WarningIcon({ className }: IconProps) {
+  return (
+    <svg className={className} aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M12 3 2 20h20L12 3Z" />
+      <path d="M12 9v5" />
+      <path d="M12 17h.01" />
     </svg>
   );
 }

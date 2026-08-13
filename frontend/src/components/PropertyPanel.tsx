@@ -5,16 +5,30 @@ import type {
   DeviceTreeProperty,
   PropertyValue,
 } from "../models/devicetree";
+import {
+  AddressingPanel,
+  type AddressingPanelState,
+} from "./AddressingPanel";
 import { CheckIcon, CopyIcon, NodeIcon, PropertiesIcon } from "./icons";
 
 interface PropertyPanelProps {
   node: DeviceTreeNode | null;
+  addressingState?: AddressingPanelState;
 }
 
-export function PropertyPanel({ node }: PropertyPanelProps) {
+type InspectorTab = "properties" | "addressing";
+
+const defaultAddressingState: AddressingPanelState = { status: "idle" };
+
+export function PropertyPanel({
+  node,
+  addressingState = defaultAddressingState,
+}: PropertyPanelProps) {
+  const [activeTab, setActiveTab] = useState<InspectorTab>("properties");
+
   if (!node) {
     return (
-      <aside className="property-panel" aria-label="Node properties">
+      <aside className="property-panel" aria-label="Node inspector">
         <div className="property-panel-empty">
           <NodeIcon className="empty-icon" />
           <span>Select a node to inspect.</span>
@@ -24,7 +38,7 @@ export function PropertyPanel({ node }: PropertyPanelProps) {
   }
 
   return (
-    <aside className="property-panel" aria-label="Node properties">
+    <aside className="property-panel" aria-label="Node inspector">
       <div className="property-panel-header">
         <div className="panel-title">
           <NodeIcon className="panel-icon" />
@@ -32,6 +46,43 @@ export function PropertyPanel({ node }: PropertyPanelProps) {
         </div>
       </div>
 
+      <div className="inspector-tabs" role="tablist" aria-label="Inspector views">
+        <button
+          className={getTabClassName(activeTab === "properties")}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "properties"}
+          onClick={() => setActiveTab("properties")}
+        >
+          Properties
+        </button>
+        <button
+          className={getTabClassName(activeTab === "addressing")}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "addressing"}
+          onClick={() => setActiveTab("addressing")}
+        >
+          Addressing
+        </button>
+      </div>
+
+      {activeTab === "properties" ? (
+        <PropertiesContent node={node} />
+      ) : (
+        <AddressingPanel node={node} state={addressingState} />
+      )}
+    </aside>
+  );
+}
+
+interface PropertiesContentProps {
+  node: DeviceTreeNode;
+}
+
+function PropertiesContent({ node }: PropertiesContentProps) {
+  return (
+    <>
       <dl className="node-metadata">
         <MetadataField
           label="Full Name"
@@ -67,7 +118,7 @@ export function PropertyPanel({ node }: PropertyPanelProps) {
           </ul>
         )}
       </section>
-    </aside>
+    </>
   );
 }
 
@@ -200,4 +251,8 @@ async function copyToClipboard(value: string): Promise<boolean> {
 
 function getPropertyKindClassName(kind: DeviceTreeProperty["kind"]): string {
   return `property-kind property-kind-${kind.replace("_", "-")}`;
+}
+
+function getTabClassName(isActive: boolean): string {
+  return isActive ? "inspector-tab inspector-tab-active" : "inspector-tab";
 }

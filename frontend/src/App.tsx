@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { getAddressingReport } from "./api/addressing";
 import { ApiError, getDeviceTree } from "./api/devicetree";
 import { DeviceTreeView } from "./components/DeviceTreeView";
 import { RefreshIcon } from "./components/icons";
 import { PropertyPanel } from "./components/PropertyPanel";
 import { SearchBox } from "./components/SearchBox";
+import type { AddressingReport } from "./models/addressing";
 import type { DeviceTreeNode, DeviceTreeResponse } from "./models/devicetree";
 import { getAncestorPaths } from "./search/devicetreeSearch";
 
@@ -13,8 +15,17 @@ type LoadState =
   | { status: "success"; tree: DeviceTreeResponse }
   | { status: "error"; message: string; detail: string[] };
 
+type AddressingLoadState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; report: AddressingReport }
+  | { status: "error"; message: string; detail: string[] };
+
 export function App() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [addressingState, setAddressingState] = useState<AddressingLoadState>({
+    status: "idle",
+  });
   const [selectedNode, setSelectedNode] = useState<DeviceTreeNode | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [selectionRequest, setSelectionRequest] = useState(0);
@@ -43,20 +54,38 @@ export function App() {
 
   const loadTree = useCallback(async () => {
     setState({ status: "loading" });
+    setAddressingState({ status: "loading" });
     setSelectedNode(null);
     setExpandedPaths(new Set());
     setSelectionRequest(0);
-    try {
-      const tree = await getDeviceTree();
+
+    const [treeResult, addressingResult] = await Promise.allSettled([
+      getDeviceTree(),
+      getAddressingReport(),
+    ]);
+
+    if (treeResult.status === "fulfilled") {
+      const tree = treeResult.value;
       setState({ status: "success", tree });
       setSelectedNode(tree.root);
       setExpandedPaths(new Set([tree.root.path]));
       setSelectionRequest(1);
-    } catch (error) {
-      setState(toErrorState(error));
+    } else {
+      setState(toErrorState(treeResult.reason));
+      setAddressingState({ status: "idle" });
       setSelectedNode(null);
       setExpandedPaths(new Set());
       setSelectionRequest(0);
+      return;
+    }
+
+    if (addressingResult.status === "fulfilled") {
+      setAddressingState({
+        status: "success",
+        report: addressingResult.value,
+      });
+    } else {
+      setAddressingState(toAddressingErrorState(addressingResult.reason));
     }
   }, []);
 
@@ -112,7 +141,10 @@ export function App() {
             onToggleNode={toggleNode}
             onSelectNode={selectNode}
           />
-          <PropertyPanel node={selectedNode} />
+          <PropertyPanel
+            node={selectedNode}
+            addressingState={addressingState}
+          />
         </div>
       )}
     </main>
@@ -140,5 +172,22 @@ function toErrorState(error: unknown): LoadState {
     status: "error",
     message: "Unknown error",
     detail: [],
+  };
+}
+
+function toAddressingErrorState(error: unknown): AddressingLoadState {
+  const errorState = toErrorState(error);
+  if (errorState.status !== "error") {
+    return {
+      status: "error",
+      message: "Unknown error",
+      detail: [],
+    };
+  }
+
+  return {
+    status: "error",
+    message: errorState.message,
+    detail: errorState.detail,
   };
 }

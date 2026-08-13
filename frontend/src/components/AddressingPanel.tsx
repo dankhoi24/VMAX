@@ -8,6 +8,7 @@ import type {
   TranslatedAddressRange,
 } from "../models/addressing";
 import type { DeviceTreeNode } from "../models/devicetree";
+import { AddressSpaceMap } from "./AddressSpaceMap";
 import { AddressingIcon, WarningIcon } from "./icons";
 import { TranslationTrace } from "./TranslationTrace";
 
@@ -20,9 +21,14 @@ export type AddressingPanelState =
 interface AddressingPanelProps {
   node: DeviceTreeNode | null;
   state: AddressingPanelState;
+  onSelectNodePath?: (nodePath: string) => void;
 }
 
-export function AddressingPanel({ node, state }: AddressingPanelProps) {
+export function AddressingPanel({
+  node,
+  state,
+  onSelectNodePath,
+}: AddressingPanelProps) {
   if (!node) {
     return (
       <div className="addressing-empty">
@@ -70,8 +76,9 @@ export function AddressingPanel({ node, state }: AddressingPanelProps) {
     details.translations.length > 0 ||
     details.mappings.length > 0 ||
     details.warnings.length > 0;
+  const hasAddressSpace = state.report.regions.length > 0;
 
-  if (!hasAddressing) {
+  if (!hasAddressing && !hasAddressSpace) {
     return (
       <section className="addressing-section">
         <p className="addressing-empty-text">
@@ -83,6 +90,28 @@ export function AddressingPanel({ node, state }: AddressingPanelProps) {
 
   return (
     <div className="addressing-panel-body">
+      {hasAddressSpace && (
+        <section
+          className="addressing-section"
+          aria-labelledby="address-space-heading"
+        >
+          <SectionHeading id="address-space-heading" title="Address Space" />
+          <AddressSpaceMap
+            regions={state.report.regions}
+            selectedNodePath={node.path}
+            onSelectRegion={onSelectNodePath}
+          />
+        </section>
+      )}
+
+      {!hasAddressing && (
+        <section className="addressing-section">
+          <p className="addressing-empty-text">
+            No address resources described for this node.
+          </p>
+        </section>
+      )}
+
       {details.regions.length > 0 && (
         <section className="addressing-section" aria-labelledby="regions-heading">
           <SectionHeading id="regions-heading" title="Region" />

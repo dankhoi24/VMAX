@@ -14,6 +14,7 @@ import { CheckIcon, CopyIcon, NodeIcon, PropertiesIcon } from "./icons";
 interface PropertyPanelProps {
   node: DeviceTreeNode | null;
   addressingState?: AddressingPanelState;
+  onSelectNodePath?: (nodePath: string) => void;
 }
 
 type InspectorTab = "properties" | "addressing";
@@ -23,6 +24,7 @@ const defaultAddressingState: AddressingPanelState = { status: "idle" };
 export function PropertyPanel({
   node,
   addressingState = defaultAddressingState,
+  onSelectNodePath,
 }: PropertyPanelProps) {
   const [activeTab, setActiveTab] = useState<InspectorTab>("properties");
 
@@ -70,7 +72,11 @@ export function PropertyPanel({
       {activeTab === "properties" ? (
         <PropertiesContent node={node} />
       ) : (
-        <AddressingPanel node={node} state={addressingState} />
+        <AddressingPanel
+          node={node}
+          state={addressingState}
+          onSelectNodePath={onSelectNodePath}
+        />
       )}
     </aside>
   );

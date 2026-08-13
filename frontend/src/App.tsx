@@ -52,6 +52,20 @@ export function App() {
     });
   }, []);
 
+  const selectNodePath = useCallback(
+    (nodePath: string) => {
+      if (state.status !== "success") {
+        return;
+      }
+
+      const node = findNodeByPath(state.tree.root, nodePath);
+      if (node) {
+        selectNode(node);
+      }
+    },
+    [selectNode, state],
+  );
+
   const loadTree = useCallback(async () => {
     setState({ status: "loading" });
     setAddressingState({ status: "loading" });
@@ -145,11 +159,30 @@ export function App() {
           <PropertyPanel
             node={selectedNode}
             addressingState={addressingState}
+            onSelectNodePath={selectNodePath}
           />
         </div>
       )}
     </main>
   );
+}
+
+function findNodeByPath(
+  node: DeviceTreeNode,
+  nodePath: string,
+): DeviceTreeNode | null {
+  if (node.path === nodePath) {
+    return node;
+  }
+
+  for (const child of node.children) {
+    const match = findNodeByPath(child, nodePath);
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
 }
 
 function toErrorState(error: unknown): LoadState {

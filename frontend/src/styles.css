@@ -788,6 +788,210 @@ button {
   padding: 0;
 }
 
+.address-space-map {
+  display: grid;
+  gap: 10px;
+}
+
+.address-space-summary {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.address-space-summary span {
+  background: var(--muted-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
+.address-space-list {
+  display: grid;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.address-space-entry {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  min-height: 54px;
+}
+
+.address-space-entry-marker {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.address-space-entry-marker::before {
+  background: var(--border-strong);
+  bottom: 0;
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 1px;
+}
+
+.address-space-entry-marker span {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 800;
+  height: 22px;
+  justify-content: center;
+  min-width: 22px;
+  padding: 0 5px;
+  position: relative;
+  text-transform: uppercase;
+  z-index: 1;
+}
+
+.address-space-region-control,
+.address-space-gap-body {
+  align-self: center;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin: 7px 0;
+  min-width: 0;
+  padding: 9px 10px;
+}
+
+.address-space-region-control {
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  cursor: default;
+  text-align: left;
+  width: 100%;
+}
+
+button.address-space-region-control {
+  cursor: pointer;
+}
+
+button.address-space-region-control:hover {
+  border-color: var(--border-strong);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.address-space-region-control-selected {
+  background: var(--accent-wash);
+  border-color: var(--border-strong);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.address-space-region-nested .address-space-region-control {
+  margin-left: 14px;
+  width: calc(100% - 14px);
+}
+
+.address-space-gap-body {
+  background: rgba(248, 250, 252, 0.64);
+  border: 1px dashed var(--border);
+  color: var(--muted);
+}
+
+.address-space-gap-body > span {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.address-space-region-main {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.address-space-region-main code {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.address-space-kind,
+.address-space-relation,
+.address-space-selected {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 7px;
+  text-transform: uppercase;
+}
+
+.address-space-kind-ram {
+  background: #e7f7ec;
+  border: 1px solid #bfe6cb;
+  color: #217447;
+}
+
+.address-space-kind-reserved {
+  background: #fff4da;
+  border: 1px solid #f3d99a;
+  color: #8a5a00;
+}
+
+.address-space-kind-device {
+  background: #eaf2ff;
+  border: 1px solid #bfd7f5;
+  color: #245b95;
+}
+
+.address-space-relation-nested {
+  background: #fce7f3;
+  border: 1px solid #f9a8d4;
+  color: #9d174d;
+}
+
+.address-space-relation-overlap {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+}
+
+.address-space-selected {
+  background: var(--accent-soft);
+  border: 1px solid var(--border-strong);
+  color: var(--accent-strong);
+}
+
+.address-space-fields {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.address-space-fields div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.address-space-fields dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.address-space-fields dd {
+  margin: 0;
+  min-width: 0;
+}
+
 .translation-resource-view {
   display: grid;
   gap: 10px;
@@ -874,6 +1078,8 @@ button {
 }
 
 .addressing-fields code,
+.address-space-fields code,
+.address-space-region-main code,
 .trace-address-pair code,
 .trace-endpoint code,
 .trace-step-header code,
@@ -1150,8 +1356,18 @@ button {
 
   .metadata-row,
   .property-fields div,
-  .addressing-fields div {
+  .addressing-fields div,
+  .address-space-fields {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .address-space-entry {
+    grid-template-columns: 26px minmax(0, 1fr);
+  }
+
+  .address-space-region-nested .address-space-region-control {
+    margin-left: 8px;
+    width: calc(100% - 8px);
   }
 
   .trace-endpoint {

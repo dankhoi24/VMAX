@@ -66,10 +66,13 @@ class Pi5AddressingSemanticTest(unittest.TestCase):
         # Analyze addressing
         report = self.analyzer.analyze(parse_result.tree)
 
-        # Find the serial device at /soc/serial@7d001000
+        # Find the serial device at /soc@107c000000/serial@7d001000
+        SERIAL_PATH = "/soc@107c000000/serial@7d001000"
+        SOC_PATH = "/soc@107c000000"
+
         serial_translation = None
         for translation in report.translations:
-            if translation.node_path == "/soc/serial@7d001000":
+            if translation.node_path == SERIAL_PATH:
                 serial_translation = translation
                 break
 
@@ -88,7 +91,7 @@ class Pi5AddressingSemanticTest(unittest.TestCase):
 
         # Verify the single step in the translation path
         step = serial_translation.translation_path[0]
-        self.assertEqual(step.bus_node_path, "/soc", "Translation should be from /soc")
+        self.assertEqual(step.bus_node_path, SOC_PATH, "Translation should be from /soc@107c000000")
         self.assertEqual(step.input_address, 0x7d001000, "Input address should be 0x7d001000")
         self.assertEqual(step.output_address, 0x107d001000, "Output address should be 0x107d001000")
         self.assertEqual(step.mapping_index, 0, "Mapping index should be 0")

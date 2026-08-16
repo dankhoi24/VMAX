@@ -3,7 +3,7 @@ from pathlib import Path
 
 from app.parsers.devicetree import LibFdtDeviceTreeParser
 from app.addressing.analyzer import AddressingAnalyzer
-from app.addressing.models import MemoryRegionKind
+from app.model.addressing import MemoryRegionKind
 
 
 class Pi5AddressingSemanticTest(unittest.TestCase):
@@ -22,53 +22,38 @@ class Pi5AddressingSemanticTest(unittest.TestCase):
 
         # Find the RAM region at /memory@0
         ram_region = None
-        reserved_regions = []
+        atf_region = None
+        cma_region = None
 
         for region in report.regions:
             if region.node_path == "/memory@0":
                 ram_region = region
-            elif region.node_path.startswith("/reserved-memory"):
-                reserved_regions.append(region)
+            elif region.node_path == "/reserved-memory/atf@0":
+                atf_region = region
+            elif region.node_path == "/reserved-memory/linux,cma":
+                cma_region = region
 
         # Verify RAM region exists and is correctly classified
         self.assertIsNotNone(ram_region, "RAM region at /memory@0 should exist")
         self.assertEqual(ram_region.kind, MemoryRegionKind.RAM,
                          "RAM region should be classified as RAM")
 
-        # Verify RAM properties
-        self.assertIsNotNone(ram_region.start, "RAM region should have start address")
-        self.assertIsNotNone(ram_region.size, "RAM region should have size")
-        self.assertGreater(ram_region.size, 0, "RAM region should have positive size")
+        # Verify exact RAM properties
+        self.assertEqual(ram_region.start, 0x0, "RAM should start at 0x0")
+        self.assertEqual(ram_region.size, 0x28000000, "RAM should be 0x28000000 bytes (640 MiB)")
+        self.assertEqual(ram_region.end, 0x27FFFFFF, "RAM end address should be 0x27FFFFFF")
 
-        # Verify reserved-memory regions exist
-        self.assertGreater(len(reserved_regions), 0, "Should have reserved memory regions")
+        # Verify ATF reserved memory region
+        self.assertIsNotNone(atf_region, "ATF reserved memory region should exist")
+        self.assertEqual(atf_region.kind, MemoryRegionKind.RESERVED,
+                         "ATF reserved memory should be classified as RESERVED")
+        self.assertEqual(atf_region.start, 0x0, "ATF reserved memory should start at 0x0")
+        self.assertEqual(atf_region.size, 0x80000, "ATF reserved memory should be 0x80000 bytes (512 KiB)")
+        self.assertEqual(atf_region.end, 0x7FFFF, "ATF reserved memory end should be 0x7FFFF")
 
-        # Verify that reserved memory regions are correctly classified
-        reserved_region_found = False
-        for region in reserved_regions:
-            if region.node_path == "/reserved-memory/atf@0":
-                self.assertEqual(region.kind, MemoryRegionKind.RESERVED,
-                                "ATF reserved memory should be classified as RESERVED")
-                reserved_region_found = True
-            elif region.node_path == "/reserved-memory/linux,cma":
-                # This region should not produce a fabricated memory region since it has no static reg
-                # but we should verify it's still processed
-                self.assertIn(region.kind, [MemoryRegionKind.RESERVED, MemoryRegionKind.UNKNOWN],
-                            "Reserved memory regions should be classified as RESERVED or UNKNOWN")
-                reserved_region_found = True
-
-        # Verify that we found at least one reserved memory region
-        self.assertTrue(reserved_region_found, "Should have found at least one reserved memory region")
-
-        # Verify that the reserved-memory/linux,cma region doesn't produce a fabricated MemoryRegion
-        # This should not produce a fabricated region since it has no static reg property
-        cma_region = None
-        for region in reserved_regions:
-            if region.node_path == "/reserved-memory/linux,cma":
-                cma_region = region
-                break
-
-        # If CMA region exists, it should be properly classified
-        if cma_region:
-            self.assertIn(cma_region.kind, [MemoryRegionKind.RESERVED, MemoryRegionKind.UNKNOWN],
-                         "CMA reserved memory should be classified as RESERVED or UNKNOWN")
+        # Verify that the reserved-memory/linux,cma region does NOT appear in the regions list
+        # This is important because it has no static reg property and should not be fabricated
+        for region in report.regions:
+            self.assertNotEqual(region.node_path, "/reserved-memory/linux,cma",
+                             "The linux,cma reserved memory node should not produce a fabricated MemoryRegion "
+                             "because it has no static reg property")

@@ -7,31 +7,30 @@ from app.model.addressing import MemoryRegionKind
 
 
 class Pi5AddressingSemanticTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.parser = LibFdtDeviceTreeParser()
-        self.analyzer = AddressingAnalyzer()
-        self.pi5_dtb_path = Path(__file__).resolve().parent / "fixtures" / "bcm2712-rpi-5-b.dtb"
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.parser = LibFdtDeviceTreeParser()
+        cls.analyzer = AddressingAnalyzer()
+        cls.pi5_dtb_path = Path(__file__).resolve().parent / "fixtures" / "bcm2712-rpi-5-b.dtb"
+        cls.parse_result = cls.parser.parse(cls.pi5_dtb_path)
+        cls.report = cls.analyzer.analyze(cls.parse_result.tree)
 
     def test_pi5_ram_and_reserved_memory_semantic_validation(self) -> None:
         # Parse the Pi 5 DTB file
-        parse_result = self.parser.parse(self.pi5_dtb_path)
-        self.assertTrue(parse_result.ok, f"Failed to parse Pi 5 DTB: {parse_result.errors}")
+        self.assertTrue(self.parse_result.ok, f"Failed to parse Pi 5 DTB: {self.parse_result.errors}")
 
         # Analyze addressing
-        report = self.analyzer.analyze(parse_result.tree)
+        report = self.report
 
         # Find the RAM region at /memory@0
         ram_region = None
         atf_region = None
-        cma_region = None
 
         for region in report.regions:
             if region.node_path == "/memory@0":
                 ram_region = region
             elif region.node_path == "/reserved-memory/atf@0":
                 atf_region = region
-            elif region.node_path == "/reserved-memory/linux,cma":
-                cma_region = region
 
         # Verify RAM region exists and is correctly classified
         self.assertIsNotNone(ram_region, "RAM region at /memory@0 should exist")
@@ -59,12 +58,8 @@ class Pi5AddressingSemanticTest(unittest.TestCase):
                              "because it has no static reg property")
 
     def test_pi5_serial_device_ranges_translation(self) -> None:
-        # Parse the Pi 5 DTB file
-        parse_result = self.parser.parse(self.pi5_dtb_path)
-        self.assertTrue(parse_result.ok, f"Failed to parse Pi 5 DTB: {parse_result.errors}")
-
         # Analyze addressing
-        report = self.analyzer.analyze(parse_result.tree)
+        report = self.report
 
         # Find the serial device at /soc@107c000000/serial@7d001000
         SERIAL_PATH = "/soc@107c000000/serial@7d001000"
@@ -95,3 +90,84 @@ class Pi5AddressingSemanticTest(unittest.TestCase):
         self.assertEqual(step.input_address, 0x7d001000, "Input address should be 0x7d001000")
         self.assertEqual(step.output_address, 0x107d001000, "Output address should be 0x107d001000")
         self.assertEqual(step.mapping_index, 0, "Mapping index should be 0")
+
+    def test_pi5_multiple_reg_resources(self) -> None:
+        # Analyze addressing
+        report = self.report
+
+        # Find the MMC device at /soc@107c000000/mmc@fff000
+        MMC_PATH = "/soc@107c000000/mmc@fff000"
+
+        translations = [
+            item
+            for item in report.translations
+            if item.node_path == MMC_PATH
+        ]
+
+        # Verify we have exactly 2 translations
+        self.assertEqual(len(translations), 2, "Should have exactly 2 translations for MMC device")
+
+        # Verify the translations match expected values
+        self.assertEqual(
+            [
+                (item.bus_address, item.cpu_address, item.size)
+                for item in translations
+            ],
+            [
+                (0xFFF000, 0x1000FFF000, 0x260),
+                (0xFFF400, 0x1000FFF400, 0x200),
+            ],
+            "Translations should match expected values"
+        )
+
+    def test_pi5_64bit_axi_addressing(self) -> None:
+        # Analyze addressing
+        report = self.report
+
+        # Find the AXI node mappings
+        axi_mappings = [
+            mapping
+            for mapping in report.mappings
+            if mapping.node_path == "/axi"
+        ]
+
+        # Verify that we found at least one mapping with the expected 64-bit addresses
+        self.assertTrue(
+            any(
+                mapping.child_address == 0x1000000000
+                and mapping.parent_address == 0x1000000000
+                and mapping.size == 0x100000000
+                for mapping in axi_mappings
+            ),
+            "Should find AXI mapping with 64-bit addresses"
+        )
+
+        # Verify that we have addresses > 32-bit
+        self.assertGreater(
+            max(mapping.parent_address for mapping in axi_mappings),
+            0xFFFFFFFF,
+            "Should have parent addresses > 32-bit"
+        )
+
+    def test_pi5_unsupported_pci_3cell_format(self) -> None:
+        # Analyze addressing
+        report = self.report
+
+        # Find the PCI node that uses 3-cell format
+        PCI_PATH = "/axi/pcie@1000120000"
+
+        # Check that we have a warning for this unsupported format
+        warnings = [
+            warning
+            for warning in report.warnings
+            if warning.node_path == PCI_PATH
+        ]
+
+        # Verify that we have at least one warning for the unsupported bus address format
+        self.assertTrue(
+            any(
+                warning.code == "UNSUPPORTED_BUS_ADDRESS_FORMAT"
+                for warning in warnings
+            ),
+            "Should have UNSUPPORTED_BUS_ADDRESS_FORMAT warning for PCI node"
+        )

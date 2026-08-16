@@ -57,3 +57,38 @@ class Pi5AddressingSemanticTest(unittest.TestCase):
             self.assertNotEqual(region.node_path, "/reserved-memory/linux,cma",
                              "The linux,cma reserved memory node should not produce a fabricated MemoryRegion "
                              "because it has no static reg property")
+
+    def test_pi5_serial_device_ranges_translation(self) -> None:
+        # Parse the Pi 5 DTB file
+        parse_result = self.parser.parse(self.pi5_dtb_path)
+        self.assertTrue(parse_result.ok, f"Failed to parse Pi 5 DTB: {parse_result.errors}")
+
+        # Analyze addressing
+        report = self.analyzer.analyze(parse_result.tree)
+
+        # Find the serial device at /soc/serial@7d001000
+        serial_translation = None
+        for translation in report.translations:
+            if translation.node_path == "/soc/serial@7d001000":
+                serial_translation = translation
+                break
+
+        # Verify that we found the serial translation
+        self.assertIsNotNone(serial_translation, "Serial device translation should exist")
+
+        # Verify translation properties
+        self.assertEqual(serial_translation.bus_address, 0x7d001000, "Bus address should be 0x7d001000")
+        self.assertEqual(serial_translation.cpu_address, 0x107d001000, "CPU address should be 0x107d001000")
+        self.assertEqual(serial_translation.size, 0x200, "Size should be 0x200")
+        self.assertEqual(serial_translation.end, 0x107d0011ff, "End address should be 0x107d0011ff")
+
+        # Verify translation path has exactly one step
+        self.assertEqual(len(serial_translation.translation_path), 1,
+                        "Translation path should have exactly one step")
+
+        # Verify the single step in the translation path
+        step = serial_translation.translation_path[0]
+        self.assertEqual(step.bus_node_path, "/soc", "Translation should be from /soc")
+        self.assertEqual(step.input_address, 0x7d001000, "Input address should be 0x7d001000")
+        self.assertEqual(step.output_address, 0x107d001000, "Output address should be 0x107d001000")
+        self.assertEqual(step.mapping_index, 0, "Mapping index should be 0")

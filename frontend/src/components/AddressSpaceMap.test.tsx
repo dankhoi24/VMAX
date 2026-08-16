@@ -685,6 +685,30 @@ describe("AddressSpaceMap", () => {
       relation: "nested",
     });
   });
+
+  it("makes address overlays non-interactive in hand mode", () => {
+    render(
+      <AddressSpaceMap
+        regions={[
+          region({
+            node_path: "/memory@0",
+            kind: "ram",
+            start: "0x0",
+            size: "0x100000",
+            end: "0xfffff",
+          }),
+        ]}
+      />,
+    );
+
+    const handModeButton = screen.getByRole("button", { name: "Hand" });
+    fireEvent.click(handModeButton);
+
+    const plot = screen.getByLabelText("CPU Physical Address Space");
+
+    // Check that plot has the correct class for hand mode
+    expect(plot.className).toContain("address-space-plot-hand");
+  });
 });
 
 function region(overrides: Partial<MemoryRegion>): MemoryRegion {

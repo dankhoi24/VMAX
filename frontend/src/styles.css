@@ -968,6 +968,12 @@ button {
   cursor: grabbing;
 }
 
+.address-space-plot-hand .address-space-region-hitbox,
+.address-space-plot-hand .address-space-cluster,
+.address-space-plot-hand .address-space-cluster-popover {
+  pointer-events: none;
+}
+
 .address-space-axis {
   border-right: 1px solid var(--border);
   position: relative;

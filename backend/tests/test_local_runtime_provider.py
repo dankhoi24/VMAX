@@ -815,6 +815,34 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
         self.assertEqual(result.warnings[0].code, "PROC_IOMEM_READ_FAILED")
         self.assertEqual(result.warnings[0].source_path, "/proc/iomem")
 
+    def test_collect_iomem_reports_redacted_proc_iomem_addresses(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            proc_root = fixture_root / "proc"
+            proc_root.mkdir()
+            (proc_root / "iomem").write_text(
+                "\n".join(
+                    (
+                        "00000000-00000000 : System RAM",
+                        "  00000000-00000000 : Kernel code",
+                        "00000000-00000000 : reserved",
+                    )
+                ),
+                encoding="utf-8",
+            )
+
+            provider = LocalLinuxRuntimeProvider(proc_root=proc_root)
+            result = provider.collect_iomem()
+
+        self.assertEqual(result.data, ())
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(
+            result.warnings[0].code,
+            "PROC_IOMEM_ADDRESSES_REDACTED",
+        )
+        self.assertEqual(result.warnings[0].source_path, "/proc/iomem")
+        self.assertNotIn(str(fixture_root), result.warnings[0].message)
+
     def test_fixture_roots_change_access_paths_not_runtime_paths(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             fixture_root = Path(root)

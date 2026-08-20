@@ -7,6 +7,7 @@ from app.runtime.model import IomemRegion, RuntimeCollection, RuntimeWarning
 
 
 PROC_IOMEM_PARSE_FAILED = "PROC_IOMEM_PARSE_FAILED"
+PROC_IOMEM_ADDRESSES_REDACTED = "PROC_IOMEM_ADDRESSES_REDACTED"
 _IOMEM_LINE_RE = re.compile(
     r"^(?P<indent>[ \t]*)(?P<start>[0-9a-fA-F]+)-"
     r"(?P<end>[0-9a-fA-F]+)\s*:\s*(?P<name>.*?)\s*$"
@@ -28,6 +29,7 @@ def parse_proc_iomem_file(
     warnings: list[RuntimeWarning] = []
     roots: list[_IomemNode] = []
     stack: list[tuple[int, _IomemNode]] = []
+    parsed_ranges: list[tuple[int, int]] = []
 
     for line_number, line in enumerate(text.splitlines(), start=1):
         if not line.strip():
@@ -38,6 +40,7 @@ def parse_proc_iomem_file(
             continue
 
         indent, node = parsed
+        parsed_ranges.append((node.start, node.end))
         while stack and stack[-1][0] >= indent:
             stack.pop()
 
@@ -61,6 +64,21 @@ def parse_proc_iomem_file(
             roots.append(node)
 
         stack.append((indent, node))
+
+    if _addresses_are_redacted(parsed_ranges):
+        return RuntimeCollection(
+            data=(),
+            warnings=(
+                RuntimeWarning(
+                    code=PROC_IOMEM_ADDRESSES_REDACTED,
+                    source_path=source_path,
+                    message=(
+                        "/proc/iomem addresses are hidden; CAP_SYS_ADMIN "
+                        "may be unavailable"
+                    ),
+                ),
+            ),
+        )
 
     return RuntimeCollection(
         data=tuple(_to_iomem_region(node) for node in roots),
@@ -122,6 +140,13 @@ def _indent_width(value: str) -> int:
     for char in value:
         width += 8 if char == "\t" else 1
     return width
+
+
+def _addresses_are_redacted(ranges: list[tuple[int, int]]) -> bool:
+    return (
+        len(ranges) >= 2
+        and all(start == 0 and end == 0 for start, end in ranges)
+    )
 
 
 def _to_iomem_region(node: _IomemNode) -> IomemRegion:

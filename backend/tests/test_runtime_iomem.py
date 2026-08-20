@@ -146,3 +146,32 @@ class RuntimeIomemTest(unittest.TestCase):
         self.assertEqual(len(result.warnings), 1)
         self.assertEqual(result.warnings[0].code, "PROC_IOMEM_PARSE_FAILED")
         self.assertEqual(result.warnings[0].source_path, "/proc/iomem")
+
+    def test_parse_proc_iomem_file_reports_redacted_addresses(self) -> None:
+        result = parse_proc_iomem_file(
+            "\n".join(
+                (
+                    "00000000-00000000 : System RAM",
+                    "  00000000-00000000 : Kernel code",
+                    "00000000-00000000 : Reserved",
+                )
+            ),
+            "/proc/iomem",
+        )
+
+        self.assertEqual(result.data, ())
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(
+            result.warnings[0].code,
+            "PROC_IOMEM_ADDRESSES_REDACTED",
+        )
+        self.assertEqual(result.warnings[0].source_path, "/proc/iomem")
+
+    def test_parse_proc_iomem_file_keeps_single_zero_range(self) -> None:
+        result = parse_proc_iomem_file("00000000-00000000 : single-byte-region")
+
+        self.assertEqual(result.warnings, ())
+        self.assertEqual(len(result.data), 1)
+        self.assertEqual(result.data[0].start, 0)
+        self.assertEqual(result.data[0].end, 0)
+        self.assertEqual(result.data[0].size, 1)

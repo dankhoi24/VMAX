@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import type { AddressingReport } from "./models/addressing";
 import type { DeviceTreeResponse } from "./models/devicetree";
+import type { RuntimeDevicesResponse } from "./models/runtime";
 
 afterEach(() => {
   cleanup();
@@ -107,6 +108,11 @@ const addressingReport: AddressingReport = {
   warnings: [],
 };
 
+const runtimeDevices: RuntimeDevicesResponse = {
+  data: [],
+  warnings: [],
+};
+
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     headers: {
@@ -129,6 +135,9 @@ function stubApi(options: StubApiOptions = {}): void {
       }
       if (url.endsWith("/api/v1/addressing")) {
         return options.addressingResponse ?? jsonResponse(addressingReport);
+      }
+      if (url.endsWith("/api/v1/runtime/devices")) {
+        return jsonResponse(runtimeDevices);
       }
       return new Response("", { status: 404, statusText: "Not Found" });
     }),

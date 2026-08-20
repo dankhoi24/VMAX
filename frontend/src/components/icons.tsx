@@ -71,6 +71,23 @@ export function PropertiesIcon({ className }: IconProps) {
   );
 }
 
+export function RuntimeIcon({ className }: IconProps) {
+  return (
+    <svg className={className} aria-hidden="true" viewBox="0 0 24 24">
+      <rect x="5" y="5" width="14" height="14" rx="2" />
+      <path d="M9 2v3" />
+      <path d="M15 2v3" />
+      <path d="M9 19v3" />
+      <path d="M15 19v3" />
+      <path d="M2 9h3" />
+      <path d="M2 15h3" />
+      <path d="M19 9h3" />
+      <path d="M19 15h3" />
+      <path d="M9 9h6v6H9z" />
+    </svg>
+  );
+}
+
 export function RefreshIcon({ className }: IconProps) {
   return (
     <svg className={className} aria-hidden="true" viewBox="0 0 24 24">

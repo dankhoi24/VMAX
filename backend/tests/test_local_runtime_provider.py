@@ -8,6 +8,7 @@ from unittest.mock import patch
 from pathlib import Path
 
 from app.runtime import (
+    IomemRegion,
     LocalLinuxRuntimeProvider,
     RuntimeCollection,
     RuntimeDevice,
@@ -765,6 +766,55 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             "/sys/bus/platform/drivers/secret-driver",
         )
 
+    def test_collect_iomem_reads_proc_iomem_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            proc_root = fixture_root / "proc"
+            proc_root.mkdir()
+            (proc_root / "iomem").write_text(
+                "\n".join(
+                    (
+                        "00000000-3fffffff : System RAM",
+                        "  00080000-001fffff : Kernel code",
+                        "40000000-40000fff : device-a",
+                    )
+                ),
+                encoding="utf-8",
+            )
+
+            provider = LocalLinuxRuntimeProvider(proc_root=proc_root)
+            result = provider.collect_iomem()
+
+        self.assertEqual(result.warnings, ())
+        self.assertEqual(len(result.data), 2)
+        self.assertIsInstance(result.data[0], IomemRegion)
+        self.assertEqual(result.data[0].name, "System RAM")
+        self.assertEqual(result.data[0].children[0].name, "Kernel code")
+        self.assertEqual(result.data[1].name, "device-a")
+
+    def test_collect_iomem_reports_missing_proc_iomem_as_partial_data(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            provider = LocalLinuxRuntimeProvider(proc_root=fixture_root / "proc")
+            result = provider.collect_iomem()
+
+        self.assertEqual(result.data, ())
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(result.warnings[0].code, "PROC_IOMEM_READ_FAILED")
+        self.assertEqual(result.warnings[0].source_path, "/proc/iomem")
+        self.assertNotIn(str(fixture_root), result.warnings[0].message)
+
+    def test_collect_iomem_reports_proc_iomem_read_error(self) -> None:
+        provider = LocalLinuxRuntimeProvider(proc_root=Path("/fixture/proc"))
+
+        with patch.object(Path, "read_text", side_effect=PermissionError("denied")):
+            result = provider.collect_iomem()
+
+        self.assertEqual(result.data, ())
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(result.warnings[0].code, "PROC_IOMEM_READ_FAILED")
+        self.assertEqual(result.warnings[0].source_path, "/proc/iomem")
+
     def test_fixture_roots_change_access_paths_not_runtime_paths(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             fixture_root = Path(root)
@@ -811,9 +861,12 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             fixture_root = Path(root)
             _make_platform_devices_root(fixture_root)
             _make_platform_drivers_root(fixture_root)
+            proc_root = fixture_root / "proc"
+            proc_root.mkdir()
+            (proc_root / "iomem").write_text("", encoding="utf-8")
             provider: RuntimeProvider = LocalLinuxRuntimeProvider(
                 sysfs_root=fixture_root / "sys",
-                proc_root=fixture_root / "proc",
+                proc_root=proc_root,
             )
 
             system_info = provider.collect_system_info()

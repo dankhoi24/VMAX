@@ -10,6 +10,7 @@ from app.runtime.model import (
 )
 from app.runtime.local_linux import LocalLinuxRuntimeProvider
 from app.runtime.provider import RuntimeProvider
+from app.runtime.resources import decode_resource_flag_names, parse_linux_resource_file
 
 __all__ = [
     "IomemRegion",
@@ -22,4 +23,6 @@ __all__ = [
     "RuntimeResource",
     "RuntimeSystemInfo",
     "RuntimeWarning",
+    "decode_resource_flag_names",
+    "parse_linux_resource_file",
 ]

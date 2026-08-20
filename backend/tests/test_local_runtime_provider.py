@@ -11,7 +11,6 @@ from app.runtime import (
     RuntimeCollection,
     RuntimeDevice,
     RuntimeProvider,
-    RuntimeResource,
     RuntimeSystemInfo,
 )
 
@@ -300,78 +299,14 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             "/sys/bus/platform/devices/device-b",
         )
 
-    def test_collect_devices_attaches_one_mmio_resource(self) -> None:
+    def test_collect_devices_does_not_assume_platform_resource_file(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             fixture_root = Path(root)
             devices_root = _make_platform_devices_root(fixture_root)
-            serial = devices_root / "107d001000.serial"
-            serial.mkdir()
-            (serial / "resource").write_text(
-                "0x000000107d001000 0x000000107d0011ff 0x0000000000000200\n",
-                encoding="utf-8",
-            )
-
-            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
-            result = provider.collect_devices()
-
-        self.assertEqual(result.warnings, ())
-        self.assertEqual(len(result.data), 1)
-        self.assertEqual(len(result.data[0].resources), 1)
-
-        resource = result.data[0].resources[0]
-        self.assertIsInstance(resource, RuntimeResource)
-        self.assertEqual(resource.index, 0)
-        self.assertEqual(resource.start, 0x107D001000)
-        self.assertEqual(resource.end, 0x107D0011FF)
-        self.assertEqual(resource.size, 0x200)
-        self.assertEqual(resource.flags, 0x200)
-        self.assertEqual(resource.flag_names, ("MEM",))
-
-    def test_collect_devices_preserves_multiple_resource_indices(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            fixture_root = Path(root)
-            devices_root = _make_platform_devices_root(fixture_root)
-            device = devices_root / "multi-resource"
+            device = devices_root / "resource-looking-device"
             device.mkdir()
             (device / "resource").write_text(
-                "\n".join(
-                    (
-                        "0x0000000000001000 0x0000000000001fff 0x0000000000000200",
-                        "0x0000000000000020 0x000000000000002f 0x0000000000000100",
-                    )
-                ),
-                encoding="utf-8",
-            )
-
-            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
-            result = provider.collect_devices()
-
-        resources = result.data[0].resources
-
-        self.assertEqual(result.warnings, ())
-        self.assertEqual(tuple(resource.index for resource in resources), (0, 1))
-        self.assertEqual(
-            tuple(resource.flag_names for resource in resources),
-            (
-                ("MEM",),
-                ("IO",),
-            ),
-        )
-
-    def test_collect_devices_reports_malformed_resource_lines(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            fixture_root = Path(root)
-            devices_root = _make_platform_devices_root(fixture_root)
-            device = devices_root / "has-bad-resource"
-            device.mkdir()
-            (device / "resource").write_text(
-                "\n".join(
-                    (
-                        "bad line",
-                        "0x0000000000001000 0x0000000000001fff 0x0000000000000200",
-                        "0x0000000000003000 0x0000000000002000 0x0000000000000200",
-                    )
-                ),
+                "0x0000000000001000 0x0000000000001fff 0x0000000000000200\n",
                 encoding="utf-8",
             )
 
@@ -379,65 +314,9 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             result = provider.collect_devices()
 
         self.assertEqual(len(result.data), 1)
-        self.assertEqual(
-            tuple(resource.index for resource in result.data[0].resources),
-            (1,),
-        )
-        self.assertEqual(len(result.warnings), 2)
-        self.assertEqual(
-            tuple(warning.code for warning in result.warnings),
-            (
-                "SYSFS_PLATFORM_DEVICE_RESOURCE_PARSE_FAILED",
-                "SYSFS_PLATFORM_DEVICE_RESOURCE_PARSE_FAILED",
-            ),
-        )
-        self.assertEqual(
-            tuple(warning.source_path for warning in result.warnings),
-            (
-                "/sys/bus/platform/devices/has-bad-resource/resource",
-                "/sys/bus/platform/devices/has-bad-resource/resource",
-            ),
-        )
-        for warning in result.warnings:
-            self.assertNotIn(str(fixture_root), warning.message)
-
-    def test_collect_devices_keeps_device_when_resource_file_is_missing(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            fixture_root = Path(root)
-            devices_root = _make_platform_devices_root(fixture_root)
-            (devices_root / "resource-less").mkdir()
-
-            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
-            result = provider.collect_devices()
-
-        self.assertEqual(len(result.data), 1)
-        self.assertEqual(result.data[0].name, "resource-less")
+        self.assertEqual(result.data[0].name, "resource-looking-device")
         self.assertEqual(result.data[0].resources, ())
         self.assertEqual(result.warnings, ())
-
-    def test_collect_devices_reports_resource_read_error(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            fixture_root = Path(root)
-            devices_root = _make_platform_devices_root(fixture_root)
-            (devices_root / "secret-device").mkdir()
-            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
-
-            with patch.object(Path, "read_text", side_effect=PermissionError("denied")):
-                result = provider.collect_devices()
-
-        self.assertEqual(len(result.data), 1)
-        self.assertEqual(result.data[0].name, "secret-device")
-        self.assertEqual(result.data[0].resources, ())
-        self.assertEqual(len(result.warnings), 1)
-        self.assertEqual(
-            result.warnings[0].code,
-            "SYSFS_PLATFORM_DEVICE_RESOURCE_READ_FAILED",
-        )
-        self.assertEqual(
-            result.warnings[0].source_path,
-            "/sys/bus/platform/devices/secret-device/resource",
-        )
-        self.assertNotIn(str(fixture_root), result.warnings[0].message)
 
     def test_fixture_roots_change_access_paths_not_runtime_paths(self) -> None:
         with tempfile.TemporaryDirectory() as root:

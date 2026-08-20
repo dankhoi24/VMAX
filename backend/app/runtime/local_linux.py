@@ -9,7 +9,6 @@ from app.runtime.model import (
     RuntimeCollection,
     RuntimeDevice,
     RuntimeDriver,
-    RuntimeResource,
     RuntimeSystemInfo,
     RuntimeWarning,
 )
@@ -18,11 +17,6 @@ from app.runtime.provider import RuntimeProvider
 
 PathInput = str | os.PathLike[str]
 PLATFORM_DEVICES_PATH = "bus/platform/devices"
-IORESOURCE_IO = 0x00000100
-IORESOURCE_MEM = 0x00000200
-IORESOURCE_IRQ = 0x00000400
-IORESOURCE_DMA = 0x00000800
-IORESOURCE_BUS = 0x00001000
 
 
 class LocalLinuxRuntimeProvider(RuntimeProvider):
@@ -117,10 +111,6 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
                     name=entry.name,
                     sysfs_path=entry_runtime_path,
                     bus="platform",
-                    resources=self._read_platform_device_resources(
-                        entry.name,
-                        warnings,
-                    ),
                 )
             )
 
@@ -149,38 +139,6 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
 
     def _proc_runtime_path(self, relative_path: PathInput) -> str:
         return _runtime_path("/proc", relative_path, "proc relative_path")
-
-    def _read_platform_device_resources(
-        self,
-        device_name: str,
-        warnings: list[RuntimeWarning],
-    ) -> tuple[RuntimeResource, ...]:
-        relative_path = f"{PLATFORM_DEVICES_PATH}/{device_name}/resource"
-        runtime_path = self._sysfs_runtime_path(relative_path)
-
-        try:
-            text = self._sysfs_access_path(relative_path).read_text(encoding="utf-8")
-        except FileNotFoundError:
-            return ()
-        except (OSError, UnicodeError) as error:
-            warnings.append(
-                RuntimeWarning(
-                    code="SYSFS_PLATFORM_DEVICE_RESOURCE_READ_FAILED",
-                    source_path=runtime_path,
-                    message=(
-                        f"Unable to read {runtime_path}: "
-                        f"{_format_error(error)}"
-                    ),
-                )
-            )
-            return ()
-
-        resources: list[RuntimeResource] = []
-        for index, line in enumerate(text.splitlines()):
-            resource = _parse_resource_line(line, index, runtime_path, warnings)
-            if resource is not None:
-                resources.append(resource)
-        return tuple(resources)
 
     def _read_proc_cmdline(self, warnings: list[RuntimeWarning]) -> str | None:
         runtime_path = self._proc_runtime_path("cmdline")
@@ -221,63 +179,6 @@ def _normalize_relative_path(value: PathInput, field_name: str) -> Path:
 def _runtime_path(root: str, relative_path: PathInput, field_name: str) -> str:
     path = _normalize_relative_path(relative_path, field_name)
     return f"{root}/{path.as_posix()}"
-
-
-def _parse_resource_line(
-    line: str,
-    index: int,
-    source_path: str,
-    warnings: list[RuntimeWarning],
-) -> RuntimeResource | None:
-    values = line.split()
-    if len(values) != 3:
-        warnings.append(
-            RuntimeWarning(
-                code="SYSFS_PLATFORM_DEVICE_RESOURCE_PARSE_FAILED",
-                source_path=source_path,
-                message=f"Malformed resource line {index} in {source_path}",
-            )
-        )
-        return None
-
-    try:
-        start = int(values[0], 0)
-        end = int(values[1], 0)
-        flags = int(values[2], 0)
-        return RuntimeResource(
-            index=index,
-            start=start,
-            end=end,
-            flags=flags,
-            flag_names=_decode_resource_flag_names(flags),
-        )
-    except (TypeError, ValueError) as error:
-        warnings.append(
-            RuntimeWarning(
-                code="SYSFS_PLATFORM_DEVICE_RESOURCE_PARSE_FAILED",
-                source_path=source_path,
-                message=(
-                    f"Unable to parse resource line {index} in {source_path}: "
-                    f"{_format_error(error)}"
-                ),
-            )
-        )
-        return None
-
-
-def _decode_resource_flag_names(flags: int) -> tuple[str, ...]:
-    names: list[str] = []
-    if flags & IORESOURCE_IO:
-        names.append("IO")
-    if flags & IORESOURCE_MEM:
-        names.append("MEM")
-    if flags & IORESOURCE_IRQ:
-        names.append("IRQ")
-    if flags & IORESOURCE_DMA:
-        names.append("DMA")
-    if flags & IORESOURCE_BUS:
-        names.append("BUS")
-    return tuple(names)
 
 
 def _read_uname(warnings: list[RuntimeWarning]) -> object | None:

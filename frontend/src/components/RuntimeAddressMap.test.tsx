@@ -135,7 +135,7 @@ describe("RuntimeAddressMap", () => {
     getRuntimeIomemMock.mockResolvedValue(
       response([systemRam], [
         {
-          code: "PROC_IOMEM_ROW_MALFORMED",
+          code: "PROC_IOMEM_PARSE_FAILED",
           message: "Unable to parse one /proc/iomem row",
           source_path: "/proc/iomem",
         },
@@ -145,7 +145,7 @@ describe("RuntimeAddressMap", () => {
     render(<RuntimeAddressMap />);
 
     expect(await screen.findByText("System RAM")).toBeTruthy();
-    expect(screen.getByText("PROC_IOMEM_ROW_MALFORMED")).toBeTruthy();
+    expect(screen.getByText("PROC_IOMEM_PARSE_FAILED")).toBeTruthy();
     expect(screen.getByText("Unable to parse one /proc/iomem row")).toBeTruthy();
     expect(screen.getByText("/proc/iomem")).toBeTruthy();
   });

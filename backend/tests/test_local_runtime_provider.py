@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 from pathlib import Path
 
 from app.runtime import (
@@ -34,6 +36,84 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
 
             self.assertEqual(provider.sysfs_root, sysfs_root)
             self.assertEqual(provider.proc_root, proc_root)
+
+    def test_collect_system_info_maps_uname_hostname_and_cmdline(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            proc_root = fixture_root / "proc"
+            proc_root.mkdir()
+            (proc_root / "cmdline").write_text(
+                "console=ttyAMA10 root=/dev/mmcblk0p2\n",
+                encoding="utf-8",
+            )
+            provider = LocalLinuxRuntimeProvider(proc_root=proc_root)
+
+            with _patched_runtime(machine="aarch64"):
+                result = provider.collect_system_info()
+
+        self.assertEqual(result.data.hostname, "pi5")
+        self.assertEqual(result.data.kernel_name, "Linux")
+        self.assertEqual(result.data.kernel_release, "6.12.80-v8")
+        self.assertEqual(result.data.kernel_version, "#1 SMP PREEMPT")
+        self.assertEqual(result.data.machine, "aarch64")
+        self.assertEqual(result.data.architecture, "arm64")
+        self.assertEqual(
+            result.data.cmdline,
+            "console=ttyAMA10 root=/dev/mmcblk0p2",
+        )
+        self.assertEqual(result.warnings, ())
+
+    def test_collect_system_info_normalizes_known_architectures(self) -> None:
+        cases = (
+            ("aarch64", "arm64"),
+            ("arm64", "arm64"),
+            ("x86_64", "x86_64"),
+            ("amd64", "x86_64"),
+            ("riscv64", "riscv64"),
+            ("mips64", "mips64"),
+        )
+
+        with tempfile.TemporaryDirectory() as root:
+            proc_root = Path(root) / "proc"
+            proc_root.mkdir()
+            (proc_root / "cmdline").write_text("", encoding="utf-8")
+            provider = LocalLinuxRuntimeProvider(proc_root=proc_root)
+
+            for machine, expected in cases:
+                with self.subTest(machine=machine), _patched_runtime(machine=machine):
+                    result = provider.collect_system_info()
+
+                self.assertEqual(result.data.machine, machine)
+                self.assertEqual(result.data.architecture, expected)
+
+    def test_collect_system_info_reports_missing_cmdline_as_partial_data(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            provider = LocalLinuxRuntimeProvider(proc_root=Path(root) / "proc")
+
+            with _patched_runtime(machine="x86_64"):
+                result = provider.collect_system_info()
+
+        self.assertEqual(result.data.hostname, "pi5")
+        self.assertEqual(result.data.machine, "x86_64")
+        self.assertEqual(result.data.architecture, "x86_64")
+        self.assertIsNone(result.data.cmdline)
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(result.warnings[0].code, "PROC_CMDLINE_READ_FAILED")
+        self.assertEqual(result.warnings[0].source_path, "/proc/cmdline")
+        self.assertNotIn(str(Path(root)), result.warnings[0].message)
+
+    def test_collect_system_info_reports_cmdline_read_error(self) -> None:
+        provider = LocalLinuxRuntimeProvider(proc_root=Path("/fixture/proc"))
+
+        with _patched_runtime(machine="riscv64"):
+            with patch.object(Path, "read_text", side_effect=PermissionError("denied")):
+                result = provider.collect_system_info()
+
+        self.assertEqual(result.data.architecture, "riscv64")
+        self.assertIsNone(result.data.cmdline)
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(result.warnings[0].code, "PROC_CMDLINE_READ_FAILED")
+        self.assertEqual(result.warnings[0].source_path, "/proc/cmdline")
 
     def test_fixture_roots_change_access_paths_not_runtime_paths(self) -> None:
         with tempfile.TemporaryDirectory() as root:
@@ -86,10 +166,44 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
 
         self.assertIsInstance(system_info, RuntimeCollection)
         self.assertIsInstance(system_info.data, RuntimeSystemInfo)
-        self.assertEqual(system_info.warnings, ())
         self.assertEqual(devices.data, ())
         self.assertEqual(devices.warnings, ())
         self.assertEqual(drivers.data, ())
         self.assertEqual(drivers.warnings, ())
         self.assertEqual(iomem.data, ())
         self.assertEqual(iomem.warnings, ())
+
+
+def _patched_runtime(machine: str):
+    uname = SimpleNamespace(
+        sysname="Linux",
+        release="6.12.80-v8",
+        version="#1 SMP PREEMPT",
+        machine=machine,
+    )
+    return _PatchedRuntime(uname)
+
+
+class _PatchedRuntime:
+    def __init__(self, uname: SimpleNamespace) -> None:
+        self._uname = uname
+        self._patches = (
+            patch(
+                "app.runtime.local_linux.os.uname",
+                return_value=uname,
+                create=True,
+            ),
+            patch(
+                "app.runtime.local_linux.socket.gethostname",
+                return_value="pi5",
+            ),
+        )
+
+    def __enter__(self) -> "_PatchedRuntime":
+        for patcher in self._patches:
+            patcher.start()
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        for patcher in reversed(self._patches):
+            patcher.stop()

@@ -97,6 +97,9 @@ class FastApiRuntimeTest(unittest.TestCase):
                         bus="platform",
                         driver_name="serial8250",
                         driver_path="/sys/bus/platform/drivers/serial8250",
+                        of_node_sysfs_path=(
+                            "/sys/firmware/devicetree/base/soc/serial@107d001000"
+                        ),
                         resources=(
                             RuntimeResource(
                                 index=0,
@@ -127,6 +130,10 @@ class FastApiRuntimeTest(unittest.TestCase):
         self.assertEqual(
             body["data"][0]["driver_path"],
             "/sys/bus/platform/drivers/serial8250",
+        )
+        self.assertEqual(
+            body["data"][0]["of_node_sysfs_path"],
+            "/sys/firmware/devicetree/base/soc/serial@107d001000",
         )
         self.assertEqual(body["data"][0]["resources"][0]["start"], 0x107D001000)
         self.assertEqual(body["data"][0]["resources"][0]["end"], 0x107D0011FF)

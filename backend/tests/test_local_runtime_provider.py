@@ -248,6 +248,62 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
         )
         self.assertNotIn(str(fixture_root), result.data[0].driver_path or "")
 
+    def test_collect_devices_populates_of_node_sysfs_path(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            devices_root = _make_platform_devices_root(fixture_root)
+            device = devices_root / "107d001000.serial"
+            device.mkdir()
+            of_node_target = (
+                fixture_root
+                / "sys"
+                / "firmware"
+                / "devicetree"
+                / "base"
+                / "soc"
+                / "serial@107d001000"
+            )
+            of_node_target.mkdir(parents=True)
+
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            with _patched_driver_symlinks({device / "of_node": of_node_target}):
+                result = provider.collect_devices()
+
+        self.assertEqual(result.warnings, ())
+        self.assertEqual(len(result.data), 1)
+        self.assertEqual(
+            result.data[0].of_node_sysfs_path,
+            "/sys/firmware/devicetree/base/soc/serial@107d001000",
+        )
+        self.assertNotIn(str(fixture_root), result.data[0].of_node_sysfs_path or "")
+
+    def test_collect_devices_reports_of_node_read_error_as_partial_data(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            devices_root = _make_platform_devices_root(fixture_root)
+            device = devices_root / "secret-of-node-device"
+            device.mkdir()
+
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            with _patched_driver_symlinks(
+                {device / "of_node": PermissionError("denied")}
+            ):
+                result = provider.collect_devices()
+
+        self.assertEqual(len(result.data), 1)
+        self.assertEqual(result.data[0].name, "secret-of-node-device")
+        self.assertIsNone(result.data[0].of_node_sysfs_path)
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(
+            result.warnings[0].code,
+            "SYSFS_PLATFORM_DEVICE_OF_NODE_READ_FAILED",
+        )
+        self.assertEqual(
+            result.warnings[0].source_path,
+            "/sys/bus/platform/devices/secret-of-node-device/of_node",
+        )
+        self.assertNotIn(str(fixture_root), result.warnings[0].message)
+
     def test_collect_devices_treats_missing_driver_symlink_as_unbound(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             fixture_root = Path(root)

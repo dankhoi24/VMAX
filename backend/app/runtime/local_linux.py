@@ -156,9 +156,23 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
         driver_link = self._sysfs_access_path(relative_path)
 
         try:
-            if not driver_link.is_symlink():
-                return None, None
+            driver_link.readlink()
+        except FileNotFoundError:
+            return None, None
+        except OSError as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="SYSFS_PLATFORM_DEVICE_DRIVER_READ_FAILED",
+                    source_path=runtime_path,
+                    message=(
+                        f"Unable to inspect driver binding for {runtime_path}: "
+                        f"{_format_error(error)}"
+                    ),
+                )
+            )
+            return None, None
 
+        try:
             target = driver_link.resolve(strict=True)
             driver_path = self._sysfs_runtime_path_from_access_path(target)
         except (OSError, ValueError) as error:

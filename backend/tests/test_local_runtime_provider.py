@@ -269,7 +269,10 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
 
             provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
             with _patched_driver_symlinks(
-                {device / "driver": FileNotFoundError("broken symlink")}
+                {device / "driver": fixture_root / "sys" / "broken-driver"},
+                resolve_errors={
+                    device / "driver": FileNotFoundError("broken symlink"),
+                },
             ):
                 result = provider.collect_devices()
 
@@ -288,7 +291,7 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
         )
         self.assertNotIn(str(fixture_root), result.warnings[0].message)
 
-    def test_collect_devices_reports_driver_resolve_error_as_partial_data(self) -> None:
+    def test_collect_devices_reports_driver_readlink_error_as_partial_data(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             fixture_root = Path(root)
             devices_root = _make_platform_devices_root(fixture_root)
@@ -548,14 +551,20 @@ class _PatchedRuntime:
 
 
 class _PatchedDriverSymlinks:
-    def __init__(self, bindings: dict[Path, Path | OSError]) -> None:
+    def __init__(
+        self,
+        bindings: dict[Path, Path | OSError],
+        *,
+        resolve_errors: dict[Path, OSError] | None = None,
+    ) -> None:
         self._bindings = bindings
+        self._resolve_errors = resolve_errors or {}
         self._patches = (
             patch.object(
                 Path,
-                "is_symlink",
+                "readlink",
                 autospec=True,
-                side_effect=self._is_symlink,
+                side_effect=self._readlink,
             ),
             patch.object(
                 Path,
@@ -574,10 +583,19 @@ class _PatchedDriverSymlinks:
         for patcher in reversed(self._patches):
             patcher.stop()
 
-    def _is_symlink(self, path: Path) -> bool:
-        return path in self._bindings
+    def _readlink(self, path: Path) -> Path:
+        if path not in self._bindings:
+            raise FileNotFoundError(path)
+
+        target = self._bindings[path]
+        if isinstance(target, OSError):
+            raise target
+        return target
 
     def _resolve(self, path: Path, strict: bool = False) -> Path:
+        if path in self._resolve_errors:
+            raise self._resolve_errors[path]
+
         target = self._bindings[path]
         if isinstance(target, OSError):
             raise target
@@ -586,8 +604,10 @@ class _PatchedDriverSymlinks:
 
 def _patched_driver_symlinks(
     bindings: dict[Path, Path | OSError],
+    *,
+    resolve_errors: dict[Path, OSError] | None = None,
 ) -> _PatchedDriverSymlinks:
-    return _PatchedDriverSymlinks(bindings)
+    return _PatchedDriverSymlinks(bindings, resolve_errors=resolve_errors)
 
 
 class _FakePathEntry:

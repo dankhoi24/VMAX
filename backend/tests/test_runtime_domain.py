@@ -6,6 +6,7 @@ from dataclasses import FrozenInstanceError
 from app.runtime import (
     IomemRegion,
     LinuxRuntimeSnapshot,
+    RuntimeCollection,
     RuntimeDevice,
     RuntimeDriver,
     RuntimeProvider,
@@ -148,41 +149,86 @@ class RuntimeDomainTest(unittest.TestCase):
         with self.assertRaises(FrozenInstanceError):
             snapshot.devices = ()
 
+    def test_runtime_collection_preserves_partial_data_and_warnings(self) -> None:
+        device = RuntimeDevice(
+            name="107d001000.serial",
+            sysfs_path="/sys/bus/platform/devices/107d001000.serial",
+            bus="platform",
+        )
+        warning = RuntimeWarning(
+            code="SYSFS_PERMISSION_DENIED",
+            source_path="/sys/bus/platform/devices/secret",
+            message="Unable to inspect device",
+        )
+        result = RuntimeCollection(
+            data=(device,),
+            warnings=[warning],
+        )
+
+        self.assertEqual(result.data, (device,))
+        self.assertEqual(result.warnings, (warning,))
+
+        with self.assertRaises(FrozenInstanceError):
+            result.warnings = ()
+
     def test_runtime_provider_protocol_exposes_granular_collectors(self) -> None:
         class FakeRuntimeProvider:
-            def collect_system_info(self) -> RuntimeSystemInfo:
-                return RuntimeSystemInfo(hostname="test-target")
+            def collect_system_info(self) -> RuntimeCollection[RuntimeSystemInfo]:
+                return RuntimeCollection(
+                    data=RuntimeSystemInfo(hostname="test-target"),
+                )
 
-            def collect_devices(self) -> tuple[RuntimeDevice, ...]:
-                return (
-                    RuntimeDevice(
-                        name="107d001000.serial",
-                        sysfs_path="/sys/bus/platform/devices/107d001000.serial",
-                        bus="platform",
+            def collect_devices(
+                self,
+            ) -> RuntimeCollection[tuple[RuntimeDevice, ...]]:
+                return RuntimeCollection(
+                    data=(
+                        RuntimeDevice(
+                            name="107d001000.serial",
+                            sysfs_path="/sys/bus/platform/devices/107d001000.serial",
+                            bus="platform",
+                        ),
+                    ),
+                    warnings=(
+                        RuntimeWarning(
+                            code="SYSFS_PERMISSION_DENIED",
+                            source_path="/sys/bus/platform/devices/secret",
+                            message="Unable to inspect device",
+                        ),
                     ),
                 )
 
-            def collect_drivers(self) -> tuple[RuntimeDriver, ...]:
-                return (
-                    RuntimeDriver(
-                        name="serial8250",
-                        sysfs_path="/sys/bus/platform/drivers/serial8250",
-                        bus="platform",
+            def collect_drivers(
+                self,
+            ) -> RuntimeCollection[tuple[RuntimeDriver, ...]]:
+                return RuntimeCollection(
+                    data=(
+                        RuntimeDriver(
+                            name="serial8250",
+                            sysfs_path="/sys/bus/platform/drivers/serial8250",
+                            bus="platform",
+                        ),
                     ),
                 )
 
-            def collect_iomem(self) -> tuple[IomemRegion, ...]:
-                return (
-                    IomemRegion(
-                        start=0x0000_0000,
-                        end=0x7FFF_FFFF,
-                        name="System RAM",
+            def collect_iomem(self) -> RuntimeCollection[tuple[IomemRegion, ...]]:
+                return RuntimeCollection(
+                    data=(
+                        IomemRegion(
+                            start=0x0000_0000,
+                            end=0x7FFF_FFFF,
+                            name="System RAM",
+                        ),
                     ),
                 )
 
         provider: RuntimeProvider = FakeRuntimeProvider()
 
-        self.assertEqual(provider.collect_system_info().hostname, "test-target")
-        self.assertEqual(provider.collect_devices()[0].bus, "platform")
-        self.assertEqual(provider.collect_drivers()[0].name, "serial8250")
-        self.assertEqual(provider.collect_iomem()[0].name, "System RAM")
+        self.assertEqual(provider.collect_system_info().data.hostname, "test-target")
+        self.assertEqual(provider.collect_devices().data[0].bus, "platform")
+        self.assertEqual(
+            provider.collect_devices().warnings[0].code,
+            "SYSFS_PERMISSION_DENIED",
+        )
+        self.assertEqual(provider.collect_drivers().data[0].name, "serial8250")
+        self.assertEqual(provider.collect_iomem().data[0].name, "System RAM")

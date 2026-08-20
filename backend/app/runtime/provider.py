@@ -4,6 +4,7 @@ from typing import Protocol
 
 from app.runtime.model import (
     IomemRegion,
+    RuntimeCollection,
     RuntimeDevice,
     RuntimeDriver,
     RuntimeSystemInfo,
@@ -11,18 +12,18 @@ from app.runtime.model import (
 
 
 class RuntimeProvider(Protocol):
-    def collect_system_info(self) -> RuntimeSystemInfo:
+    def collect_system_info(self) -> RuntimeCollection[RuntimeSystemInfo]:
         """Collect runtime host and kernel metadata."""
         ...
 
-    def collect_devices(self) -> tuple[RuntimeDevice, ...]:
+    def collect_devices(self) -> RuntimeCollection[tuple[RuntimeDevice, ...]]:
         """Collect runtime devices without forcing unrelated runtime data reads."""
         ...
 
-    def collect_drivers(self) -> tuple[RuntimeDriver, ...]:
+    def collect_drivers(self) -> RuntimeCollection[tuple[RuntimeDriver, ...]]:
         """Collect runtime drivers without forcing unrelated runtime data reads."""
         ...
 
-    def collect_iomem(self) -> tuple[IomemRegion, ...]:
+    def collect_iomem(self) -> RuntimeCollection[tuple[IomemRegion, ...]]:
         """Collect the runtime /proc/iomem hierarchy."""
         ...

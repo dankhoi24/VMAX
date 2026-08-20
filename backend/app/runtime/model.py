@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Generic, TypeVar
 
 
 MetadataValue = str | int | bool | None
 MetadataItems = tuple[tuple[str, MetadataValue], ...]
+T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -23,7 +25,21 @@ class RuntimeWarning:
 
 
 @dataclass(frozen=True)
+class RuntimeCollection(Generic[T]):
+    data: T
+    warnings: tuple[RuntimeWarning, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "warnings", tuple(self.warnings))
+
+
+@dataclass(frozen=True)
 class RuntimeSystemInfo:
+    """Runtime host metadata.
+
+    machine is the raw uname machine; architecture is the VMAX-normalized value.
+    """
+
     hostname: str | None = None
     kernel_name: str | None = None
     kernel_release: str | None = None

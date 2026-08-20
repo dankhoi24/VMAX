@@ -106,11 +106,17 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
                 )
                 continue
 
+            driver_name, driver_path = self._read_platform_device_driver(
+                entry.name,
+                warnings,
+            )
             devices.append(
                 RuntimeDevice(
                     name=entry.name,
                     sysfs_path=entry_runtime_path,
                     bus="platform",
+                    driver_name=driver_name,
+                    driver_path=driver_path,
                 )
             )
 
@@ -139,6 +145,43 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
 
     def _proc_runtime_path(self, relative_path: PathInput) -> str:
         return _runtime_path("/proc", relative_path, "proc relative_path")
+
+    def _read_platform_device_driver(
+        self,
+        device_name: str,
+        warnings: list[RuntimeWarning],
+    ) -> tuple[str | None, str | None]:
+        relative_path = f"{PLATFORM_DEVICES_PATH}/{device_name}/driver"
+        runtime_path = self._sysfs_runtime_path(relative_path)
+        driver_link = self._sysfs_access_path(relative_path)
+
+        try:
+            if not driver_link.is_symlink():
+                return None, None
+
+            target = driver_link.resolve(strict=True)
+            driver_path = self._sysfs_runtime_path_from_access_path(target)
+        except (OSError, ValueError) as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="SYSFS_PLATFORM_DEVICE_DRIVER_READ_FAILED",
+                    source_path=runtime_path,
+                    message=(
+                        f"Unable to resolve driver binding for {runtime_path}: "
+                        f"{_format_error(error)}"
+                    ),
+                )
+            )
+            return None, None
+
+        return target.name, driver_path
+
+    def _sysfs_runtime_path_from_access_path(self, access_path: Path) -> str:
+        try:
+            relative_path = access_path.relative_to(self._sysfs_root)
+        except ValueError as error:
+            raise ValueError("sysfs access path is outside sysfs_root") from error
+        return self._sysfs_runtime_path(relative_path)
 
     def _read_proc_cmdline(self, warnings: list[RuntimeWarning]) -> str | None:
         runtime_path = self._proc_runtime_path("cmdline")

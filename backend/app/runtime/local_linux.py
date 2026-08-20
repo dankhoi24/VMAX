@@ -115,6 +115,10 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
                 entry.name,
                 warnings,
             )
+            of_node_sysfs_path = self._read_platform_device_of_node(
+                entry.name,
+                warnings,
+            )
             devices.append(
                 RuntimeDevice(
                     name=entry.name,
@@ -122,6 +126,7 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
                     bus="platform",
                     driver_name=driver_name,
                     driver_path=driver_path,
+                    of_node_sysfs_path=of_node_sysfs_path,
                 )
             )
 
@@ -264,6 +269,48 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
             return None, None
 
         return target.name, driver_path
+
+    def _read_platform_device_of_node(
+        self,
+        device_name: str,
+        warnings: list[RuntimeWarning],
+    ) -> str | None:
+        relative_path = f"{PLATFORM_DEVICES_PATH}/{device_name}/of_node"
+        runtime_path = self._sysfs_runtime_path(relative_path)
+        of_node_link = self._sysfs_access_path(relative_path)
+
+        try:
+            of_node_link.readlink()
+        except FileNotFoundError:
+            return None
+        except OSError as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="SYSFS_PLATFORM_DEVICE_OF_NODE_READ_FAILED",
+                    source_path=runtime_path,
+                    message=(
+                        f"Unable to inspect of_node link for {runtime_path}: "
+                        f"{_format_error(error)}"
+                    ),
+                )
+            )
+            return None
+
+        try:
+            target = of_node_link.resolve(strict=True)
+            return self._sysfs_runtime_path_from_access_path(target)
+        except (OSError, ValueError) as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="SYSFS_PLATFORM_DEVICE_OF_NODE_READ_FAILED",
+                    source_path=runtime_path,
+                    message=(
+                        f"Unable to resolve of_node link for {runtime_path}: "
+                        f"{_format_error(error)}"
+                    ),
+                )
+            )
+            return None
 
     def _read_platform_driver_bound_devices(
         self,

@@ -4,7 +4,7 @@ VMAX is an **Embedded System Topology & Correlation Explorer** for understanding
 
 The project starts with Device Tree exploration and is designed to grow toward correlation across devices, drivers, MMIO, IRQs, DMA/IOMMU/IOVA, kernel symbols, snapshots, and SoC-specific plugins.
 
-> **v0.1.0 — Device Tree Explorer:** the first public development release of VMAX, focused on loading compiled DTBs, browsing their hierarchy, inspecting node properties, and searching the tree from a browser UI.
+> **v0.2.0 — Memory/MMIO Map:** the second public development release of VMAX, adding semantic Device Tree address analysis, address-translation tracing, and an interactive physical address-space map on top of the v0.1 Device Tree Explorer.
 
 ## Why VMAX
 
@@ -20,9 +20,9 @@ Low-level Linux and embedded debugging often requires jumping between multiple v
 
 VMAX aims to correlate those views into one consistent model instead of treating them as separate tools and files.
 
-## v0.1.0 scope
+## v0.2.0 scope
 
-VMAX v0.1.0 implements a complete Device Tree exploration path:
+VMAX v0.2.0 extends the Device Tree exploration path with semantic address analysis:
 
 ```text
 .dtb
@@ -33,13 +33,16 @@ pylibfdt
   v
 LibFdtDeviceTreeParser
   |
-  +--> PropertyDecoder
-  |
   v
 DeviceTree domain model
   |
+  +--> AddressCellContextResolver
+  +--> RegInterpreter
+  +--> RangesInterpreter / RangesTranslator
+  +--> MemoryRegionClassifier
+  |
   v
-DeviceTreeCollector / DeviceTreeState
+AddressingReport
   |
   v
 FastAPI + Pydantic API schema
@@ -52,29 +55,33 @@ TypeScript API client
 React
   ├── Search
   ├── DeviceTreeView
-  └── PropertyPanel
+  ├── PropertyPanel
+  ├── AddressingPanel
+  ├── TranslationTrace
+  └── AddressSpaceMap
 ```
 
-Implemented in v0.1.0:
+Implemented in v0.2.0:
 
-- `DeviceTree`, `DeviceTreeNode`, `DeviceTreeProperty`, and `ParseResult` domain models
-- conservative property decoding for boolean, string, string-list, cells, bytes, and unknown values
-- direct DTB parsing through `pylibfdt`
-- recursive node/property traversal
-- preservation of raw property bytes
-- Device Tree collector and current-source state
-- FastAPI endpoints for metadata and the parsed Device Tree
-- Pydantic response schemas and OpenAPI contract
-- TypeScript API models and API client
-- React/Vite Device Tree browser with recursive expand/collapse
-- selected-node property inspector with raw-hex inspection and copy controls
-- local search by node name, path, compatible value, and property name
-- automatic ancestor expansion and scroll-to-selection from search results
-- responsive developer-tool-oriented UI
-- backend, API-client, search, and frontend component tests
-- real-DTB validation with Raspberry Pi 5 and two Renesas R-Car DTB configurations
+- all v0.1.0 Device Tree parsing, browsing, property inspection, and search capabilities
+- addressing domain models for cell contexts, `reg` resources, range mappings, translations, memory regions, and structured warnings
+- `#address-cells` and `#size-cells` context resolution with provenance
+- Device Tree `reg` interpretation, including multiple resources per node
+- `ranges` interpretation and child-bus to parent-bus / CPU address translation
+- explicit distinction between missing `ranges` and empty identity `ranges`
+- translation provenance through `TranslationStep` records
+- RAM, reserved-memory, and device-region classification
+- conservative handling of unsupported bus address formats without fabricating translations
+- 64-bit / greater-than-4-GiB address preservation
+- FastAPI addressing endpoint and typed frontend addressing models
+- selected-node Addressing panel with exact hexadecimal values
+- Translation Trace for bus-to-CPU provenance
+- interactive Address Space Map with BigInt-safe address handling
+- map support for overlaps, nesting, gaps, clusters, selection, zoom, pan, Fit All, and Fit Selected
+- progressive loading so Device Tree browsing remains usable while addressing data resolves
+- backend unit/integration coverage plus real Raspberry Pi 5 DTB semantic validation
 
-v0.1.0 intentionally does **not** yet include `/proc`, `/sys`, runtime driver correlation, MMIO interpretation, IRQ runtime data, DMA/IOMMU analysis, WebSocket events, or SoC-specific semantic behavior.
+v0.2.0 intentionally does **not** yet include `/proc`, `/sys`, runtime driver correlation, runtime MMIO ownership, IRQ runtime data, DMA/IOMMU/IOVA mappings, PCI-specific 3-cell address semantics, WebSocket events, or SoC-specific runtime behavior.
 
 ## Architecture direction
 
@@ -121,8 +128,8 @@ SoC plugins
 ## Roadmap
 
 - **v0.1 — Device Tree Explorer**: DTB parsing, domain model, API, tree browser, property panel, search — **complete**
-- **v0.2 — Memory/MMIO Map**: interpret `reg`, `ranges`, reserved memory, and address cells
-- **v0.3 — Linux Runtime Explorer**: `/sys`, `/proc`, devices and runtime resources
+- **v0.2 — Memory/MMIO Map**: `reg`, `ranges`, address cells, memory regions, translation trace, address-space map — **complete**
+- **v0.3 — Linux Runtime Explorer**: `/sys`, `/proc`, devices and runtime resources — **next**
 - **v0.4 — DT ↔ Device ↔ Driver correlation**
 - **v0.5 — IRQ and dependency graph**
 - **v0.6 — PCIe topology and snapshots**
@@ -138,6 +145,7 @@ QNX support is planned after the Linux-oriented v1.0 core is stable.
 ```text
 backend/
 ├── app/
+│   ├── addressing/
 │   ├── api/
 │   ├── collectors/
 │   ├── model/
@@ -273,6 +281,7 @@ Useful endpoints:
 ```text
 GET http://localhost:8000/api/v1/metadata
 GET http://localhost:8000/api/v1/devicetree
+GET http://localhost:8000/api/v1/addressing
 ```
 
 ### 4. Start the frontend on Windows
@@ -294,37 +303,15 @@ Open that URL in a browser. The Vite development server proxies `/api` requests 
 
 ### 5. Expected result
 
-With both processes running, the request flow is:
-
-```text
-Browser
-  |
-  v
-React / Vite :5173
-  |
-  | /api/v1/devicetree
-  v
-Vite proxy
-  |
-  v
-FastAPI :8000 (WSL)
-  |
-  v
-DeviceTreeCollector
-  |
-  v
-pylibfdt
-  |
-  v
-DTB
-```
-
-The browser should provide:
+With both processes running, the browser provides:
 
 - expandable/collapsible Device Tree navigation
 - selected-node property inspection
 - decoded property values with optional raw-hex inspection
 - local search and navigation to matching nodes
+- semantic `reg` / `ranges` address information for selected nodes
+- bus-to-CPU Translation Trace
+- interactive physical Address Space Map
 
 ## Tests
 
@@ -332,7 +319,7 @@ Run backend tests from the repository root in the Python environment:
 
 ```bash
 export PYTHONPATH=backend
-uv run --extra dev python -m unittest discover -s backend/tests -v
+uv run --extra dev --extra dtb python -m unittest discover -s backend/tests -v
 ```
 
 Run frontend tests, type checking, and the production build from `frontend/`:
@@ -347,23 +334,34 @@ The real-DTB backend path requires the `libfdt` Python binding (`pylibfdt`).
 
 ## Validation
 
-v0.1.0 has been manually exercised with real compiled Device Trees from:
+v0.2.0 addressing semantics have been validated with a real Raspberry Pi 5 DTB through the production parser and addressing pipeline.
 
-- Raspberry Pi 5
-- Renesas R-Car DTB configuration #1
-- Renesas R-Car DTB configuration #2
+The real-DTB validation covers:
 
-The validation covers parsing, tree rendering, node inspection, search, search-result navigation, and reload behavior.
+- exact RAM and fixed reserved-memory regions
+- no fabricated static region for dynamic CMA without `reg`
+- simple-bus `ranges` translation with exact bus and CPU addresses
+- translation provenance
+- multiple `reg` resources
+- addresses above 4 GiB
+- structured handling of unsupported PCI 3-cell address formats
+
+The full frontend regression suite, TypeScript type check, production build, and backend regression suite are part of the release validation workflow.
+
+The earlier v0.1 Device Tree Explorer was also manually exercised with Raspberry Pi 5 and two Renesas R-Car DTB configurations for parsing, tree browsing, property inspection, search, navigation, and reload behavior.
 
 ## Design principles
 
 - **Preserve raw data**: decoded values never replace the original DTB bytes.
 - **Prefer known semantics over heuristics**: property-name knowledge wins over byte-pattern guessing.
-- **Be conservative when uncertain**: ambiguous values remain `UNKNOWN` rather than being misclassified.
+- **Be conservative when uncertain**: unsupported or ambiguous address semantics produce structured warnings rather than fabricated mappings.
 - **Keep libfdt behind an adapter boundary**: pylibfdt objects do not leak into the domain model.
-- **Separate syntax from semantics**: v0.1 decodes representation; later versions interpret `reg`, `ranges`, IRQs, and other hardware meaning.
-- **Keep the core generic**: Raspberry Pi and R-Car use the same parser/model contracts.
+- **Separate syntax from semantics**: parsing/decoding stays separate from addressing interpretation and future runtime correlation.
+- **Keep the core generic**: platform-specific support should build on the same parser, model, and addressing contracts.
+- **Preserve provenance**: translated addresses retain the bus/range steps that produced them.
 
 ## Project status
 
-VMAX v0.1.0 is the first public development release. The project remains pre-1.0, so interfaces and package layout may evolve as the roadmap moves toward runtime correlation and hardware-resource analysis.
+VMAX v0.2.0 is the second public development release. It adds static Device Tree memory/MMIO semantics and address-space visualization while the project remains pre-1.0.
+
+The next milestone is **v0.3 — Linux Runtime Explorer**, which will add `/sys` and `/proc` runtime data as the foundation for Device Tree ↔ runtime correlation.

@@ -299,6 +299,25 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             "/sys/bus/platform/devices/device-b",
         )
 
+    def test_collect_devices_does_not_assume_platform_resource_file(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            devices_root = _make_platform_devices_root(fixture_root)
+            device = devices_root / "resource-looking-device"
+            device.mkdir()
+            (device / "resource").write_text(
+                "0x0000000000001000 0x0000000000001fff 0x0000000000000200\n",
+                encoding="utf-8",
+            )
+
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            result = provider.collect_devices()
+
+        self.assertEqual(len(result.data), 1)
+        self.assertEqual(result.data[0].name, "resource-looking-device")
+        self.assertEqual(result.data[0].resources, ())
+        self.assertEqual(result.warnings, ())
+
     def test_fixture_roots_change_access_paths_not_runtime_paths(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             fixture_root = Path(root)

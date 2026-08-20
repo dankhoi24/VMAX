@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import tempfile
 import unittest
 from types import SimpleNamespace
@@ -10,6 +11,7 @@ from app.runtime import (
     LocalLinuxRuntimeProvider,
     RuntimeCollection,
     RuntimeDevice,
+    RuntimeDriver,
     RuntimeProvider,
     RuntimeSystemInfo,
 )
@@ -445,6 +447,254 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
         self.assertEqual(result.data[0].resources, ())
         self.assertEqual(result.warnings, ())
 
+    def test_collect_drivers_enumerates_bound_platform_device(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            drivers_root = _make_platform_drivers_root(fixture_root)
+            sysfs_devices_root = _make_sysfs_devices_root(fixture_root)
+            driver = drivers_root / "serial8250"
+            driver.mkdir()
+            bound_link = driver / "107d001000.serial"
+            bound_link.touch()
+            bound_target = sysfs_devices_root / "platform" / "107d001000.serial"
+            bound_target.mkdir(parents=True)
+
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            with _patched_driver_symlinks({bound_link: bound_target}):
+                result = provider.collect_drivers()
+
+        self.assertEqual(result.warnings, ())
+        self.assertEqual(len(result.data), 1)
+
+        driver_model = result.data[0]
+        self.assertIsInstance(driver_model, RuntimeDriver)
+        self.assertEqual(driver_model.name, "serial8250")
+        self.assertEqual(
+            driver_model.sysfs_path,
+            "/sys/bus/platform/drivers/serial8250",
+        )
+        self.assertEqual(driver_model.bus, "platform")
+        self.assertEqual(
+            driver_model.bound_device_paths,
+            ("/sys/bus/platform/devices/107d001000.serial",),
+        )
+        self.assertIsNone(driver_model.module_name)
+        self.assertNotIn(str(fixture_root), driver_model.sysfs_path)
+        self.assertNotIn(str(fixture_root), driver_model.bound_device_paths[0])
+
+    def test_collect_drivers_preserves_multiple_bound_device_order(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            drivers_root = _make_platform_drivers_root(fixture_root)
+            sysfs_devices_root = _make_sysfs_devices_root(fixture_root)
+            driver = drivers_root / "bcm2835-clk"
+            driver.mkdir()
+            first_link = driver / "1000fff000.mmc"
+            second_link = driver / "107d001000.serial"
+            first_link.touch()
+            second_link.touch()
+            first_target = sysfs_devices_root / "platform" / first_link.name
+            second_target = sysfs_devices_root / "platform" / second_link.name
+            first_target.mkdir(parents=True)
+            second_target.mkdir(parents=True)
+
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            with _patched_driver_symlinks(
+                {
+                    second_link: second_target,
+                    first_link: first_target,
+                }
+            ):
+                result = provider.collect_drivers()
+
+        self.assertEqual(result.warnings, ())
+        self.assertEqual(
+            result.data[0].bound_device_paths,
+            (
+                "/sys/bus/platform/devices/1000fff000.mmc",
+                "/sys/bus/platform/devices/107d001000.serial",
+            ),
+        )
+
+    def test_collect_drivers_keeps_driver_with_no_bound_devices(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            drivers_root = _make_platform_drivers_root(fixture_root)
+            driver = drivers_root / "unbound-driver"
+            driver.mkdir()
+            bind = driver / "bind"
+            unbind = driver / "unbind"
+            uevent = driver / "uevent"
+            bind.touch()
+            unbind.touch()
+            uevent.touch()
+
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            with _patched_driver_symlinks(
+                {},
+                non_symlinks={bind, unbind, uevent},
+            ):
+                result = provider.collect_drivers()
+
+        self.assertEqual(result.warnings, ())
+        self.assertEqual(len(result.data), 1)
+        self.assertEqual(result.data[0].name, "unbound-driver")
+        self.assertEqual(result.data[0].bound_device_paths, ())
+
+    def test_collect_drivers_sorts_multiple_drivers_by_name(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            drivers_root = _make_platform_drivers_root(fixture_root)
+            (drivers_root / "serial8250").mkdir()
+            (drivers_root / "bcm2835-clk").mkdir()
+            (drivers_root / "fixed-regulator").mkdir()
+
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            result = provider.collect_drivers()
+
+        self.assertEqual(result.warnings, ())
+        self.assertEqual(
+            tuple(driver.name for driver in result.data),
+            ("bcm2835-clk", "fixed-regulator", "serial8250"),
+        )
+
+    def test_collect_drivers_ignores_module_and_control_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            drivers_root = _make_platform_drivers_root(fixture_root)
+            sysfs_devices_root = _make_sysfs_devices_root(fixture_root)
+            module_root = fixture_root / "sys" / "module"
+            module_root.mkdir(parents=True)
+            driver = drivers_root / "serial8250"
+            driver.mkdir()
+            bound_link = driver / "107d001000.serial"
+            module_link = driver / "module"
+            bind = driver / "bind"
+            unbind = driver / "unbind"
+            uevent = driver / "uevent"
+            bound_link.touch()
+            module_link.touch()
+            bind.touch()
+            unbind.touch()
+            uevent.touch()
+            bound_target = sysfs_devices_root / "platform" / bound_link.name
+            module_target = module_root / "serial8250"
+            bound_target.mkdir(parents=True)
+            module_target.mkdir()
+
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            with _patched_driver_symlinks(
+                {
+                    bound_link: bound_target,
+                    module_link: module_target,
+                },
+                non_symlinks={bind, unbind, uevent},
+            ):
+                result = provider.collect_drivers()
+
+        self.assertEqual(result.warnings, ())
+        self.assertEqual(
+            result.data[0].bound_device_paths,
+            ("/sys/bus/platform/devices/107d001000.serial",),
+        )
+        self.assertIsNone(result.data[0].module_name)
+
+    def test_collect_drivers_reports_broken_bound_device_link(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            drivers_root = _make_platform_drivers_root(fixture_root)
+            sysfs_devices_root = _make_sysfs_devices_root(fixture_root)
+            driver = drivers_root / "serial8250"
+            driver.mkdir()
+            broken_link = driver / "broken-device"
+            broken_link.touch()
+            broken_target = sysfs_devices_root / "platform" / "broken-device"
+
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            with _patched_driver_symlinks(
+                {broken_link: broken_target},
+                resolve_errors={
+                    broken_link: FileNotFoundError("broken symlink"),
+                },
+            ):
+                result = provider.collect_drivers()
+
+        self.assertEqual(len(result.data), 1)
+        self.assertEqual(result.data[0].name, "serial8250")
+        self.assertEqual(result.data[0].bound_device_paths, ())
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(
+            result.warnings[0].code,
+            "SYSFS_PLATFORM_DRIVER_BOUND_DEVICE_READ_FAILED",
+        )
+        self.assertEqual(
+            result.warnings[0].source_path,
+            "/sys/bus/platform/drivers/serial8250/broken-device",
+        )
+        self.assertNotIn(str(fixture_root), result.warnings[0].message)
+
+    def test_collect_drivers_reports_missing_platform_drivers_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            result = provider.collect_drivers()
+
+        self.assertEqual(result.data, ())
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(
+            result.warnings[0].code,
+            "SYSFS_PLATFORM_DRIVERS_READ_FAILED",
+        )
+        self.assertEqual(
+            result.warnings[0].source_path,
+            "/sys/bus/platform/drivers",
+        )
+        self.assertNotIn(str(fixture_root), result.warnings[0].message)
+
+    def test_collect_drivers_reports_platform_drivers_read_error(self) -> None:
+        provider = LocalLinuxRuntimeProvider(sysfs_root=Path("/fixture/sys"))
+
+        with patch.object(Path, "iterdir", side_effect=PermissionError("denied")):
+            result = provider.collect_drivers()
+
+        self.assertEqual(result.data, ())
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(
+            result.warnings[0].code,
+            "SYSFS_PLATFORM_DRIVERS_READ_FAILED",
+        )
+        self.assertEqual(
+            result.warnings[0].source_path,
+            "/sys/bus/platform/drivers",
+        )
+
+    def test_collect_drivers_reports_driver_directory_read_error(self) -> None:
+        provider = LocalLinuxRuntimeProvider(sysfs_root=Path("/fixture/sys"))
+        drivers_root = Path("/fixture/sys") / "bus/platform/drivers"
+
+        def iterdir(path: Path):
+            if path == drivers_root:
+                return (_FakePathEntry("secret-driver", is_directory=True),)
+            if path == drivers_root / "secret-driver":
+                raise PermissionError("denied")
+            raise FileNotFoundError(path)
+
+        with patch.object(Path, "iterdir", autospec=True, side_effect=iterdir):
+            result = provider.collect_drivers()
+
+        self.assertEqual(len(result.data), 1)
+        self.assertEqual(result.data[0].name, "secret-driver")
+        self.assertEqual(result.data[0].bound_device_paths, ())
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(
+            result.warnings[0].code,
+            "SYSFS_PLATFORM_DRIVER_READ_FAILED",
+        )
+        self.assertEqual(
+            result.warnings[0].source_path,
+            "/sys/bus/platform/drivers/secret-driver",
+        )
+
     def test_fixture_roots_change_access_paths_not_runtime_paths(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             fixture_root = Path(root)
@@ -490,6 +740,7 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             fixture_root = Path(root)
             _make_platform_devices_root(fixture_root)
+            _make_platform_drivers_root(fixture_root)
             provider: RuntimeProvider = LocalLinuxRuntimeProvider(
                 sysfs_root=fixture_root / "sys",
                 proc_root=fixture_root / "proc",
@@ -510,6 +761,10 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
         self.assertEqual(devices.data, ())
         self.assertEqual(devices.warnings, ())
         self.assertEqual(drivers.data, ())
+        self.assertEqual(
+            tuple(isinstance(driver, RuntimeDriver) for driver in drivers.data),
+            (),
+        )
         self.assertEqual(drivers.warnings, ())
         self.assertEqual(iomem.data, ())
         self.assertEqual(iomem.warnings, ())
@@ -556,9 +811,11 @@ class _PatchedDriverSymlinks:
         bindings: dict[Path, Path | OSError],
         *,
         resolve_errors: dict[Path, OSError] | None = None,
+        non_symlinks: set[Path] | None = None,
     ) -> None:
         self._bindings = bindings
         self._resolve_errors = resolve_errors or {}
+        self._non_symlinks = non_symlinks or set()
         self._patches = (
             patch.object(
                 Path,
@@ -584,6 +841,9 @@ class _PatchedDriverSymlinks:
             patcher.stop()
 
     def _readlink(self, path: Path) -> Path:
+        if path in self._non_symlinks:
+            raise OSError(errno.EINVAL, "not a symlink")
+
         if path not in self._bindings:
             raise FileNotFoundError(path)
 
@@ -606,8 +866,13 @@ def _patched_driver_symlinks(
     bindings: dict[Path, Path | OSError],
     *,
     resolve_errors: dict[Path, OSError] | None = None,
+    non_symlinks: set[Path] | None = None,
 ) -> _PatchedDriverSymlinks:
-    return _PatchedDriverSymlinks(bindings, resolve_errors=resolve_errors)
+    return _PatchedDriverSymlinks(
+        bindings,
+        resolve_errors=resolve_errors,
+        non_symlinks=non_symlinks,
+    )
 
 
 class _FakePathEntry:
@@ -630,5 +895,17 @@ class _FakePathEntry:
 
 def _make_platform_devices_root(fixture_root: Path) -> Path:
     devices_root = fixture_root / "sys" / "bus" / "platform" / "devices"
+    devices_root.mkdir(parents=True)
+    return devices_root
+
+
+def _make_platform_drivers_root(fixture_root: Path) -> Path:
+    drivers_root = fixture_root / "sys" / "bus" / "platform" / "drivers"
+    drivers_root.mkdir(parents=True)
+    return drivers_root
+
+
+def _make_sysfs_devices_root(fixture_root: Path) -> Path:
+    devices_root = fixture_root / "sys" / "devices"
     devices_root.mkdir(parents=True)
     return devices_root

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import os
 import socket
 from pathlib import Path
@@ -17,6 +18,9 @@ from app.runtime.provider import RuntimeProvider
 
 PathInput = str | os.PathLike[str]
 PLATFORM_DEVICES_PATH = "bus/platform/devices"
+PLATFORM_DRIVERS_PATH = "bus/platform/drivers"
+SYSFS_DEVICES_RUNTIME_PREFIX = "/sys/devices/"
+WINDOWS_NOT_A_REPARSE_POINT = 4390
 
 
 class LocalLinuxRuntimeProvider(RuntimeProvider):
@@ -123,7 +127,59 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
         return RuntimeCollection(data=tuple(devices), warnings=tuple(warnings))
 
     def collect_drivers(self) -> RuntimeCollection[tuple[RuntimeDriver, ...]]:
-        return RuntimeCollection(data=())
+        warnings: list[RuntimeWarning] = []
+        runtime_path = self._sysfs_runtime_path(PLATFORM_DRIVERS_PATH)
+
+        try:
+            entries = sorted(
+                self._sysfs_access_path(PLATFORM_DRIVERS_PATH).iterdir(),
+                key=lambda entry: entry.name,
+            )
+        except OSError as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="SYSFS_PLATFORM_DRIVERS_READ_FAILED",
+                    source_path=runtime_path,
+                    message=(
+                        f"Unable to read {runtime_path}: "
+                        f"{_format_error(error)}"
+                    ),
+                )
+            )
+            return RuntimeCollection(data=(), warnings=tuple(warnings))
+
+        drivers: list[RuntimeDriver] = []
+        for entry in entries:
+            entry_runtime_path = f"{runtime_path}/{entry.name}"
+            try:
+                if not entry.is_dir():
+                    continue
+            except OSError as error:
+                warnings.append(
+                    RuntimeWarning(
+                        code="SYSFS_PLATFORM_DRIVER_READ_FAILED",
+                        source_path=entry_runtime_path,
+                        message=(
+                            f"Unable to inspect {entry_runtime_path}: "
+                            f"{_format_error(error)}"
+                        ),
+                    )
+                )
+                continue
+
+            drivers.append(
+                RuntimeDriver(
+                    name=entry.name,
+                    sysfs_path=entry_runtime_path,
+                    bus="platform",
+                    bound_device_paths=self._read_platform_driver_bound_devices(
+                        entry.name,
+                        warnings,
+                    ),
+                )
+            )
+
+        return RuntimeCollection(data=tuple(drivers), warnings=tuple(warnings))
 
     def collect_iomem(self) -> RuntimeCollection[tuple[IomemRegion, ...]]:
         return RuntimeCollection(data=())
@@ -189,6 +245,77 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
             return None, None
 
         return target.name, driver_path
+
+    def _read_platform_driver_bound_devices(
+        self,
+        driver_name: str,
+        warnings: list[RuntimeWarning],
+    ) -> tuple[str, ...]:
+        relative_path = f"{PLATFORM_DRIVERS_PATH}/{driver_name}"
+        runtime_path = self._sysfs_runtime_path(relative_path)
+
+        try:
+            entries = sorted(
+                self._sysfs_access_path(relative_path).iterdir(),
+                key=lambda entry: entry.name,
+            )
+        except OSError as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="SYSFS_PLATFORM_DRIVER_READ_FAILED",
+                    source_path=runtime_path,
+                    message=(
+                        f"Unable to read {runtime_path}: "
+                        f"{_format_error(error)}"
+                    ),
+                )
+            )
+            return ()
+
+        bound_device_paths: list[str] = []
+        for entry in entries:
+            entry_runtime_path = f"{runtime_path}/{entry.name}"
+            try:
+                entry.readlink()
+            except OSError as error:
+                if _is_not_symlink_error(error):
+                    continue
+                warnings.append(
+                    RuntimeWarning(
+                        code="SYSFS_PLATFORM_DRIVER_BOUND_DEVICE_READ_FAILED",
+                        source_path=entry_runtime_path,
+                        message=(
+                            f"Unable to inspect bound device link "
+                            f"{entry_runtime_path}: {_format_error(error)}"
+                        ),
+                    )
+                )
+                continue
+
+            try:
+                target = entry.resolve(strict=True)
+                target_runtime_path = self._sysfs_runtime_path_from_access_path(target)
+            except (OSError, ValueError) as error:
+                warnings.append(
+                    RuntimeWarning(
+                        code="SYSFS_PLATFORM_DRIVER_BOUND_DEVICE_READ_FAILED",
+                        source_path=entry_runtime_path,
+                        message=(
+                            f"Unable to resolve bound device link "
+                            f"{entry_runtime_path}: {_format_error(error)}"
+                        ),
+                    )
+                )
+                continue
+
+            if not target_runtime_path.startswith(SYSFS_DEVICES_RUNTIME_PREFIX):
+                continue
+
+            bound_device_paths.append(
+                self._sysfs_runtime_path(f"{PLATFORM_DEVICES_PATH}/{entry.name}")
+            )
+
+        return tuple(bound_device_paths)
 
     def _sysfs_runtime_path_from_access_path(self, access_path: Path) -> str:
         try:
@@ -294,3 +421,10 @@ def _normalize_architecture(machine: str | None) -> str | None:
 
 def _format_error(error: Exception) -> str:
     return getattr(error, "strerror", None) or str(error)
+
+
+def _is_not_symlink_error(error: OSError) -> bool:
+    return (
+        getattr(error, "errno", None) == errno.EINVAL
+        or getattr(error, "winerror", None) == WINDOWS_NOT_A_REPARSE_POINT
+    )

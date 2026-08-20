@@ -65,7 +65,7 @@ class RuntimeDevice:
     bus: str
     driver_name: str | None = None
     driver_path: str | None = None
-    of_node_path: str | None = None
+    of_node_sysfs_path: str | None = None
     subsystem_path: str | None = None
     modalias: str | None = None
     resources: tuple[RuntimeResource, ...] = field(default_factory=tuple)
@@ -77,7 +77,10 @@ class RuntimeDevice:
         _validate_non_empty(self.bus, "RuntimeDevice.bus")
         _validate_optional_non_empty(self.driver_name, "RuntimeDevice.driver_name")
         _validate_optional_absolute_path(self.driver_path, "RuntimeDevice.driver_path")
-        _validate_optional_absolute_path(self.of_node_path, "RuntimeDevice.of_node_path")
+        _validate_optional_absolute_path(
+            self.of_node_sysfs_path,
+            "RuntimeDevice.of_node_sysfs_path",
+        )
         _validate_optional_absolute_path(
             self.subsystem_path,
             "RuntimeDevice.subsystem_path",

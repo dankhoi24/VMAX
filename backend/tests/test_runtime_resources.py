@@ -75,6 +75,25 @@ class RuntimeResourcesTest(unittest.TestCase):
             ),
         )
 
+    def test_parse_linux_resource_file_skips_empty_resource_slots(self) -> None:
+        result = parse_linux_resource_file(
+            "\n".join(
+                (
+                    "0x0000000000000000 0x0000000000000000 0x0000000000000000",
+                    "0x00000000f0000000 0x00000000f00fffff 0x0000000000000200",
+                    "0x0000000000000000 0x0000000000000000 0x0000000000000000",
+                )
+            ),
+            "/sys/bus/pci/devices/0000:00:00.0/resource",
+        )
+
+        self.assertEqual(result.warnings, ())
+        self.assertEqual(tuple(resource.index for resource in result.data), (1,))
+        self.assertEqual(result.data[0].start, 0xF0000000)
+        self.assertEqual(result.data[0].end, 0xF00FFFFF)
+        self.assertEqual(result.data[0].size, 0x100000)
+        self.assertEqual(result.data[0].flag_names, ("MEM",))
+
     def test_decode_resource_flag_names_uses_resource_type_bits(self) -> None:
         self.assertEqual(decode_resource_flag_names(0x100), ("IO",))
         self.assertEqual(decode_resource_flag_names(0x200), ("MEM",))

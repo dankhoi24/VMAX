@@ -64,6 +64,9 @@ def _parse_resource_line(
         start = int(values[0], 0)
         end = int(values[1], 0)
         flags = int(values[2], 0)
+        if start == 0 and end == 0 and flags == 0:
+            return None
+
         return RuntimeResource(
             index=index,
             start=start,

@@ -165,7 +165,7 @@ describe("RuntimeDeviceBrowser", () => {
     expect(within(list).getByText("fixedregulator_3v3")).toBeTruthy();
   });
 
-  it("shows selected device details without rendering resource internals", async () => {
+  it("shows selected device details with runtime resource fields", async () => {
     getRuntimeDevicesMock.mockResolvedValue(
       response([serialDevice, regulatorDevice]),
     );
@@ -178,13 +178,18 @@ describe("RuntimeDeviceBrowser", () => {
 
     const detail = screen.getByLabelText("Runtime device detail");
     expect(detail.textContent).toContain("1 resource");
-    expect(detail.textContent).not.toContain("0x107D001000");
-    expect(detail.textContent).not.toContain("MEM");
+    expect(detail.textContent).toContain("0x107D001000");
+    expect(detail.textContent).toContain("0x107D0011FF");
+    expect(detail.textContent).toContain("0x200");
+    expect(detail.textContent).toContain("MEM");
 
     fireEvent.click(screen.getByRole("button", { name: /fixedregulator_3v3/ }));
 
     expect(detail.textContent).toContain("fixedregulator_3v3");
     expect(detail.textContent).toContain("0 resources");
+    expect(detail.textContent).toContain(
+      "No runtime resources exposed for this device.",
+    );
   });
 
   it("marks binding as unknown when driver binding could not be inspected", async () => {

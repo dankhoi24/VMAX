@@ -7,6 +7,7 @@ import type {
   RuntimeWarning,
 } from "../models/runtime";
 import { RuntimeIcon, SearchIcon, WarningIcon, XIcon } from "./icons";
+import { RuntimeResourcePanel } from "./RuntimeResourcePanel";
 
 type RuntimeDeviceState =
   | { status: "loading" }
@@ -238,6 +239,7 @@ function RuntimeDeviceDetails({ device, warnings }: RuntimeDeviceDetailsProps) {
           value={formatResourceCount(device.resources.length)}
         />
       </dl>
+      <RuntimeResourcePanel resources={device.resources} />
     </aside>
   );
 }

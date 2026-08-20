@@ -581,7 +581,8 @@ button {
 .runtime-device-name,
 .runtime-device-row-meta,
 .runtime-detail-heading code,
-.runtime-detail-grid code {
+.runtime-detail-grid code,
+.runtime-resource-grid code {
   font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   overflow-wrap: anywhere;
 }
@@ -679,6 +680,122 @@ button {
 }
 
 .runtime-detail-grid code {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.runtime-resource-panel {
+  border-top: 1px solid var(--border);
+}
+
+.runtime-resource-heading {
+  align-items: center;
+  background: var(--surface-tint);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 14px;
+}
+
+.runtime-resource-heading h3 {
+  color: var(--text);
+  font-size: 14px;
+  margin: 0;
+}
+
+.runtime-resource-count {
+  background: var(--accent-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 800;
+  min-width: 24px;
+  padding: 1px 7px;
+  text-align: center;
+}
+
+.runtime-resource-empty {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+  padding: 14px;
+}
+
+.runtime-resource-list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 12px 14px 14px;
+}
+
+.runtime-resource-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.runtime-resource-item-header {
+  align-items: center;
+  background: var(--surface-tint);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 9px 10px;
+}
+
+.runtime-resource-item-header strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.runtime-resource-flags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+.runtime-resource-flag {
+  background: #eaf2ff;
+  border: 1px solid #bfd7f5;
+  border-radius: 999px;
+  color: #245b95;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 1px 7px;
+}
+
+.runtime-resource-grid {
+  margin: 0;
+}
+
+.runtime-resource-grid div {
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 88px minmax(0, 1fr);
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
+.runtime-resource-grid div:last-child {
+  border-bottom: 0;
+}
+
+.runtime-resource-grid dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.runtime-resource-grid dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.runtime-resource-grid code {
   color: var(--text);
   font-size: 12px;
 }
@@ -2074,7 +2191,8 @@ button {
   .metadata-row,
   .property-fields div,
   .addressing-fields div,
-  .runtime-detail-grid div {
+  .runtime-detail-grid div,
+  .runtime-resource-grid div {
     grid-template-columns: minmax(0, 1fr);
   }
 

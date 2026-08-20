@@ -13,6 +13,7 @@ from app.runtime.model import (
     RuntimeSystemInfo,
     RuntimeWarning,
 )
+from app.runtime.iomem import parse_proc_iomem_file
 from app.runtime.provider import RuntimeProvider
 
 
@@ -182,7 +183,25 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
         return RuntimeCollection(data=tuple(drivers), warnings=tuple(warnings))
 
     def collect_iomem(self) -> RuntimeCollection[tuple[IomemRegion, ...]]:
-        return RuntimeCollection(data=())
+        runtime_path = self._proc_runtime_path("iomem")
+        try:
+            text = self._proc_access_path("iomem").read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            return RuntimeCollection(
+                data=(),
+                warnings=(
+                    RuntimeWarning(
+                        code="PROC_IOMEM_READ_FAILED",
+                        source_path=runtime_path,
+                        message=(
+                            f"Unable to read {runtime_path}: "
+                            f"{_format_error(error)}"
+                        ),
+                    ),
+                ),
+            )
+
+        return parse_proc_iomem_file(text, runtime_path)
 
     def _sysfs_access_path(self, relative_path: PathInput) -> Path:
         return self._sysfs_root / _normalize_relative_path(

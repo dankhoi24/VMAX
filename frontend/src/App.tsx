@@ -5,6 +5,7 @@ import { ApiError, getDeviceTree } from "./api/devicetree";
 import { DeviceTreeView } from "./components/DeviceTreeView";
 import { RefreshIcon } from "./components/icons";
 import { PropertyPanel, type InspectorTab } from "./components/PropertyPanel";
+import { RuntimeAddressMap } from "./components/RuntimeAddressMap";
 import { RuntimeDeviceBrowser } from "./components/RuntimeDeviceBrowser";
 import { SearchBox } from "./components/SearchBox";
 import type { AddressingReport } from "./models/addressing";
@@ -177,6 +178,7 @@ export function App() {
       )}
 
       <RuntimeDeviceBrowser />
+      <RuntimeAddressMap />
     </main>
   );
 }

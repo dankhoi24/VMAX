@@ -47,6 +47,7 @@ button {
 
 .app-header,
 .search-panel,
+.runtime-address-map,
 .runtime-browser,
 .workspace-grid {
   margin: 0 auto;
@@ -136,6 +137,7 @@ button {
 .status-panel,
 .tree-surface,
 .property-panel,
+.runtime-address-map,
 .runtime-browser {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -354,6 +356,7 @@ button {
 
 .tree-toolbar,
 .property-panel-header,
+.runtime-address-map-header,
 .runtime-browser-header {
   align-items: center;
   background: rgba(255, 254, 254, 0.96);
@@ -380,6 +383,7 @@ button {
 
 .tree-toolbar h2,
 .property-panel-header h2,
+.runtime-address-map-header h2,
 .runtime-browser-header h2,
 .properties-heading-row h3 {
   color: var(--text);
@@ -397,6 +401,12 @@ button {
   overflow: hidden;
 }
 
+.runtime-address-map {
+  margin-top: 16px;
+  overflow: hidden;
+}
+
+.runtime-address-map-header > span,
 .runtime-browser-header > span {
   color: var(--muted);
   font-size: 13px;
@@ -582,6 +592,8 @@ button {
 .runtime-device-row-meta,
 .runtime-detail-heading code,
 .runtime-detail-grid code,
+.runtime-iomem-fields code,
+.runtime-iomem-range code,
 .runtime-resource-grid code {
   font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   overflow-wrap: anywhere;
@@ -796,6 +808,126 @@ button {
 }
 
 .runtime-resource-grid code {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.runtime-iomem-unavailable {
+  color: var(--muted);
+  padding: 16px;
+}
+
+.runtime-iomem-unavailable strong {
+  color: var(--text);
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.runtime-iomem-unavailable p,
+.runtime-iomem-empty {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.runtime-iomem-empty {
+  padding: 16px;
+}
+
+.runtime-iomem-tree {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 12px 14px 14px;
+}
+
+.runtime-iomem-tree-children {
+  border-left: 1px solid var(--guide);
+  margin-left: 12px;
+  padding-bottom: 0;
+  padding-right: 0;
+  padding-top: 8px;
+}
+
+.runtime-iomem-region-item {
+  display: grid;
+}
+
+.runtime-iomem-region {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.runtime-iomem-region-main {
+  align-items: center;
+  background: var(--surface-tint);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 9px 10px;
+}
+
+.runtime-iomem-region-main strong {
+  color: var(--text);
+  font-size: 13px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.runtime-iomem-child-count {
+  background: var(--accent-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--accent-strong);
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 1px 7px;
+}
+
+.runtime-iomem-range {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  padding: 9px 10px;
+}
+
+.runtime-iomem-range span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.runtime-iomem-fields {
+  border-top: 1px solid var(--border);
+  margin: 0;
+}
+
+.runtime-iomem-fields div {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 88px minmax(0, 1fr);
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
+.runtime-iomem-fields dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.runtime-iomem-fields dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.runtime-iomem-fields code,
+.runtime-iomem-range code {
   color: var(--text);
   font-size: 12px;
 }
@@ -2191,6 +2323,7 @@ button {
   .metadata-row,
   .property-fields div,
   .addressing-fields div,
+  .runtime-iomem-fields div,
   .runtime-detail-grid div,
   .runtime-resource-grid div {
     grid-template-columns: minmax(0, 1fr);
@@ -2233,6 +2366,10 @@ button {
   }
 
   .trace-address-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .runtime-iomem-range {
     grid-template-columns: minmax(0, 1fr);
   }
 

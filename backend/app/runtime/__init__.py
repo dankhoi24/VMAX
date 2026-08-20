@@ -8,11 +8,13 @@ from app.runtime.model import (
     RuntimeSystemInfo,
     RuntimeWarning,
 )
+from app.runtime.local_linux import LocalLinuxRuntimeProvider
 from app.runtime.provider import RuntimeProvider
 
 __all__ = [
     "IomemRegion",
     "LinuxRuntimeSnapshot",
+    "LocalLinuxRuntimeProvider",
     "RuntimeCollection",
     "RuntimeDevice",
     "RuntimeDriver",

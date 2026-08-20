@@ -14,6 +14,18 @@ from .devicetree import (
     MetadataResponse,
     ParseErrorDetail,
 )
+from .runtime import (
+    IomemRegionResponse,
+    RuntimeDeviceCollectionResponse,
+    RuntimeDeviceResponse,
+    RuntimeDriverCollectionResponse,
+    RuntimeDriverResponse,
+    RuntimeIomemCollectionResponse,
+    RuntimeMetadataCollectionResponse,
+    RuntimeResourceResponse,
+    RuntimeSystemInfoResponse,
+    RuntimeWarningResponse,
+)
 
 __all__ = [
     "AddressingReportResponse",
@@ -22,10 +34,20 @@ __all__ = [
     "DeviceTreePropertyResponse",
     "DeviceTreeResponse",
     "ErrorResponse",
+    "IomemRegionResponse",
     "MemoryRegionResponse",
     "MetadataResponse",
     "ParseErrorDetail",
     "RangeMappingResponse",
+    "RuntimeDeviceCollectionResponse",
+    "RuntimeDeviceResponse",
+    "RuntimeDriverCollectionResponse",
+    "RuntimeDriverResponse",
+    "RuntimeIomemCollectionResponse",
+    "RuntimeMetadataCollectionResponse",
+    "RuntimeResourceResponse",
+    "RuntimeSystemInfoResponse",
+    "RuntimeWarningResponse",
     "TranslatedAddressRangeResponse",
     "TranslationStepResponse",
 ]

@@ -94,14 +94,14 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
         runtime_path = self._proc_runtime_path("cmdline")
         try:
             return self._proc_access_path("cmdline").read_text(encoding="utf-8").strip()
-        except OSError as error:
+        except (OSError, UnicodeError) as error:
             warnings.append(
                 RuntimeWarning(
                     code="PROC_CMDLINE_READ_FAILED",
                     source_path=runtime_path,
                     message=(
                         f"Unable to read {runtime_path}: "
-                        f"{_format_os_error(error)}"
+                        f"{_format_error(error)}"
                     ),
                 )
             )
@@ -185,5 +185,5 @@ def _normalize_architecture(machine: str | None) -> str | None:
     return normalized
 
 
-def _format_os_error(error: OSError) -> str:
-    return error.strerror or str(error)
+def _format_error(error: Exception) -> str:
+    return getattr(error, "strerror", None) or str(error)

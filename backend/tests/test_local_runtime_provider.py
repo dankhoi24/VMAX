@@ -115,6 +115,74 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
         self.assertEqual(result.warnings[0].code, "PROC_CMDLINE_READ_FAILED")
         self.assertEqual(result.warnings[0].source_path, "/proc/cmdline")
 
+    def test_collect_system_info_reports_cmdline_decode_error(self) -> None:
+        provider = LocalLinuxRuntimeProvider(proc_root=Path("/fixture/proc"))
+        decode_error = UnicodeDecodeError(
+            "utf-8",
+            b"\xff",
+            0,
+            1,
+            "invalid start byte",
+        )
+
+        with _patched_runtime(machine="aarch64"):
+            with patch.object(Path, "read_text", side_effect=decode_error):
+                result = provider.collect_system_info()
+
+        self.assertEqual(result.data.architecture, "arm64")
+        self.assertIsNone(result.data.cmdline)
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(result.warnings[0].code, "PROC_CMDLINE_READ_FAILED")
+        self.assertEqual(result.warnings[0].source_path, "/proc/cmdline")
+
+    def test_collect_system_info_reports_uname_failure_as_partial_data(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            proc_root = Path(root) / "proc"
+            proc_root.mkdir()
+            (proc_root / "cmdline").write_text("quiet\n", encoding="utf-8")
+            provider = LocalLinuxRuntimeProvider(proc_root=proc_root)
+
+            with patch(
+                "app.runtime.local_linux.os.uname",
+                side_effect=OSError("uname failed"),
+                create=True,
+            ):
+                with patch(
+                    "app.runtime.local_linux.socket.gethostname",
+                    return_value="pi5",
+                ):
+                    result = provider.collect_system_info()
+
+        self.assertEqual(result.data.hostname, "pi5")
+        self.assertIsNone(result.data.kernel_name)
+        self.assertIsNone(result.data.machine)
+        self.assertIsNone(result.data.architecture)
+        self.assertEqual(result.data.cmdline, "quiet")
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(result.warnings[0].code, "UNAME_READ_FAILED")
+
+    def test_collect_system_info_reports_hostname_failure_as_partial_data(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            proc_root = Path(root) / "proc"
+            proc_root.mkdir()
+            (proc_root / "cmdline").write_text("quiet\n", encoding="utf-8")
+            provider = LocalLinuxRuntimeProvider(proc_root=proc_root)
+
+            with _patched_runtime(machine="aarch64"):
+                with patch(
+                    "app.runtime.local_linux.socket.gethostname",
+                    side_effect=OSError("hostname failed"),
+                ):
+                    result = provider.collect_system_info()
+
+        self.assertIsNone(result.data.hostname)
+        self.assertEqual(result.data.kernel_name, "Linux")
+        self.assertEqual(result.data.machine, "aarch64")
+        self.assertEqual(result.data.architecture, "arm64")
+        self.assertEqual(result.data.cmdline, "quiet")
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(result.warnings[0].code, "HOSTNAME_READ_FAILED")
+
     def test_fixture_roots_change_access_paths_not_runtime_paths(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             fixture_root = Path(root)

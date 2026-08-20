@@ -13,6 +13,9 @@ type RuntimeDeviceState =
   | { status: "success"; response: RuntimeDevicesResponse }
   | { status: "error"; message: string; detail: string[] };
 
+type BindingState = "bound" | "unbound" | "unknown";
+
+const driverBindingReadFailedCode = "SYSFS_PLATFORM_DEVICE_DRIVER_READ_FAILED";
 const emptyDevices: RuntimeDevice[] = [];
 
 export function RuntimeDeviceBrowser() {
@@ -56,24 +59,25 @@ export function RuntimeDeviceBrowser() {
     [devices, trimmedQuery],
   );
   const selectedDevice =
-    devices.find((device) => device.sysfs_path === selectedPath) ?? null;
+    filteredDevices.find((device) => device.sysfs_path === selectedPath) ?? null;
 
   useEffect(() => {
     if (state.status !== "success") {
       return;
     }
 
-    if (state.response.data.length === 0) {
-      if (selectedPath !== null) {
-        setSelectedPath(null);
-      }
+    const nextSelectedPath = filteredDevices[0]?.sysfs_path ?? null;
+    if (
+      selectedPath !== null &&
+      filteredDevices.some((device) => device.sysfs_path === selectedPath)
+    ) {
       return;
     }
 
-    if (!selectedDevice) {
-      setSelectedPath(state.response.data[0].sysfs_path);
+    if (selectedPath !== nextSelectedPath) {
+      setSelectedPath(nextSelectedPath);
     }
-  }, [selectedDevice, selectedPath, state]);
+  }, [filteredDevices, selectedPath, state.status]);
 
   return (
     <section className="runtime-browser" aria-label="Runtime devices">
@@ -158,7 +162,7 @@ export function RuntimeDeviceBrowser() {
                           <span className="runtime-device-name">
                             {device.name}
                           </span>
-                          <BindingBadge device={device} />
+                          <BindingBadge device={device} warnings={warnings} />
                         </span>
                         <span className="runtime-device-row-meta">
                           {device.driver_name ?? device.bus}
@@ -170,7 +174,7 @@ export function RuntimeDeviceBrowser() {
               )}
             </div>
 
-            <RuntimeDeviceDetails device={selectedDevice} />
+            <RuntimeDeviceDetails device={selectedDevice} warnings={warnings} />
           </div>
         </>
       )}
@@ -201,9 +205,10 @@ function RuntimeWarnings({ warnings }: RuntimeWarningsProps) {
 
 interface RuntimeDeviceDetailsProps {
   device: RuntimeDevice | null;
+  warnings: RuntimeWarning[];
 }
 
-function RuntimeDeviceDetails({ device }: RuntimeDeviceDetailsProps) {
+function RuntimeDeviceDetails({ device, warnings }: RuntimeDeviceDetailsProps) {
   if (!device) {
     return (
       <aside className="runtime-device-detail" aria-label="Runtime device detail">
@@ -216,7 +221,7 @@ function RuntimeDeviceDetails({ device }: RuntimeDeviceDetailsProps) {
     <aside className="runtime-device-detail" aria-label="Runtime device detail">
       <div className="runtime-detail-heading">
         <code>{device.name}</code>
-        <BindingBadge device={device} />
+        <BindingBadge device={device} warnings={warnings} />
       </div>
       <dl className="runtime-detail-grid">
         <RuntimeField label="sysfs_path" value={device.sysfs_path} />
@@ -255,18 +260,35 @@ function RuntimeField({ label, value }: RuntimeFieldProps) {
 
 interface BindingBadgeProps {
   device: RuntimeDevice;
+  warnings: RuntimeWarning[];
 }
 
-function BindingBadge({ device }: BindingBadgeProps) {
-  const isBound = Boolean(device.driver_name);
+function BindingBadge({ device, warnings }: BindingBadgeProps) {
+  const bindingState = getBindingState(device, warnings);
 
   return (
-    <span
-      className={isBound ? "runtime-badge runtime-badge-bound" : "runtime-badge"}
-    >
-      {isBound ? "bound" : "unbound"}
+    <span className={getBindingBadgeClassName(bindingState)}>
+      {bindingState}
     </span>
   );
+}
+
+function getBindingState(
+  device: RuntimeDevice,
+  warnings: RuntimeWarning[],
+): BindingState {
+  if (device.driver_name !== null) {
+    return "bound";
+  }
+
+  const driverPath = `${device.sysfs_path}/driver`;
+  const bindingUnknown = warnings.some(
+    (warning) =>
+      warning.code === driverBindingReadFailedCode &&
+      warning.source_path === driverPath,
+  );
+
+  return bindingUnknown ? "unknown" : "unbound";
 }
 
 function filterDevices(
@@ -299,6 +321,18 @@ function getDeviceButtonClassName(isSelected: boolean): string {
   return isSelected
     ? "runtime-device-button runtime-device-button-selected"
     : "runtime-device-button";
+}
+
+function getBindingBadgeClassName(bindingState: BindingState): string {
+  if (bindingState === "bound") {
+    return "runtime-badge runtime-badge-bound";
+  }
+
+  if (bindingState === "unknown") {
+    return "runtime-badge runtime-badge-unknown";
+  }
+
+  return "runtime-badge";
 }
 
 function toErrorState(error: unknown): RuntimeDeviceState {

@@ -80,6 +80,12 @@ const regulatorDevice: RuntimeDevice = {
   metadata: [],
 };
 
+const uncertainDevice: RuntimeDevice = {
+  ...regulatorDevice,
+  name: "device-a",
+  sysfs_path: "/sys/bus/platform/devices/device-a",
+};
+
 function response(
   devices: RuntimeDevice[],
   warnings: RuntimeDevicesResponse["warnings"] = [],
@@ -145,6 +151,18 @@ describe("RuntimeDeviceBrowser", () => {
     list = screen.getByLabelText("Runtime device list");
     expect(within(list).getByText("fixedregulator_3v3")).toBeTruthy();
     expect(within(list).queryByText("107d001000.serial")).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Clear runtime device search" }),
+    );
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Search runtime devices" }),
+      { target: { value: "platform" } },
+    );
+
+    list = screen.getByLabelText("Runtime device list");
+    expect(within(list).getByText("107d001000.serial")).toBeTruthy();
+    expect(within(list).getByText("fixedregulator_3v3")).toBeTruthy();
   });
 
   it("shows selected device details without rendering resource internals", async () => {
@@ -167,6 +185,27 @@ describe("RuntimeDeviceBrowser", () => {
 
     expect(detail.textContent).toContain("fixedregulator_3v3");
     expect(detail.textContent).toContain("0 resources");
+  });
+
+  it("marks binding as unknown when driver binding could not be inspected", async () => {
+    getRuntimeDevicesMock.mockResolvedValue(
+      response([uncertainDevice], [
+        {
+          code: "SYSFS_PLATFORM_DEVICE_DRIVER_READ_FAILED",
+          message: "Unable to inspect driver binding",
+          source_path: "/sys/bus/platform/devices/device-a/driver",
+        },
+      ]),
+    );
+
+    render(<RuntimeDeviceBrowser />);
+
+    expect(
+      await screen.findByRole("button", { name: /device-a/ }),
+    ).toBeTruthy();
+    expect(screen.getAllByText("unknown").length).toBeGreaterThan(0);
+    expect(screen.queryByText("unbound")).toBeNull();
+    expect(screen.getByText("SYSFS_PLATFORM_DEVICE_DRIVER_READ_FAILED")).toBeTruthy();
   });
 
   it("shows warnings without hiding successful device data", async () => {

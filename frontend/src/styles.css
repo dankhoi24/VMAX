@@ -615,6 +615,12 @@ button {
   color: #217447;
 }
 
+.runtime-badge-unknown {
+  background: #fff4da;
+  border-color: #f3d99a;
+  color: #8a5a00;
+}
+
 .runtime-empty {
   color: var(--muted);
   font-size: 13px;

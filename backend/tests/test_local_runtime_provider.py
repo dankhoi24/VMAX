@@ -266,6 +266,39 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             "/sys/bus/platform/devices",
         )
 
+    def test_collect_devices_reports_per_entry_read_error_as_partial_data(self) -> None:
+        provider = LocalLinuxRuntimeProvider(sysfs_root=Path("/fixture/sys"))
+        entries = (
+            _FakePathEntry("device-a", is_directory=True),
+            _FakePathEntry("device-b", error=PermissionError("denied")),
+            _FakePathEntry("device-c", is_directory=True),
+            _FakePathEntry("not-a-device", is_directory=False),
+        )
+
+        with patch.object(Path, "iterdir", return_value=entries):
+            result = provider.collect_devices()
+
+        self.assertEqual(
+            tuple(device.name for device in result.data),
+            ("device-a", "device-c"),
+        )
+        self.assertEqual(
+            tuple(device.sysfs_path for device in result.data),
+            (
+                "/sys/bus/platform/devices/device-a",
+                "/sys/bus/platform/devices/device-c",
+            ),
+        )
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(
+            result.warnings[0].code,
+            "SYSFS_PLATFORM_DEVICE_READ_FAILED",
+        )
+        self.assertEqual(
+            result.warnings[0].source_path,
+            "/sys/bus/platform/devices/device-b",
+        )
+
     def test_fixture_roots_change_access_paths_not_runtime_paths(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             fixture_root = Path(root)
@@ -369,6 +402,24 @@ class _PatchedRuntime:
     def __exit__(self, *args: object) -> None:
         for patcher in reversed(self._patches):
             patcher.stop()
+
+
+class _FakePathEntry:
+    def __init__(
+        self,
+        name: str,
+        *,
+        is_directory: bool = False,
+        error: OSError | None = None,
+    ) -> None:
+        self.name = name
+        self._is_directory = is_directory
+        self._error = error
+
+    def is_dir(self) -> bool:
+        if self._error is not None:
+            raise self._error
+        return self._is_directory
 
 
 def _make_platform_devices_root(fixture_root: Path) -> Path:

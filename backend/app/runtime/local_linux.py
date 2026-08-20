@@ -86,16 +86,35 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
             )
             return RuntimeCollection(data=(), warnings=tuple(warnings))
 
-        devices = tuple(
-            RuntimeDevice(
-                name=entry.name,
-                sysfs_path=f"{runtime_path}/{entry.name}",
-                bus="platform",
+        devices: list[RuntimeDevice] = []
+        for entry in entries:
+            entry_runtime_path = f"{runtime_path}/{entry.name}"
+            try:
+                # sysfs device entries are usually symlinks; is_dir follows them.
+                if not entry.is_dir():
+                    continue
+            except OSError as error:
+                warnings.append(
+                    RuntimeWarning(
+                        code="SYSFS_PLATFORM_DEVICE_READ_FAILED",
+                        source_path=entry_runtime_path,
+                        message=(
+                            f"Unable to inspect {entry_runtime_path}: "
+                            f"{_format_error(error)}"
+                        ),
+                    )
+                )
+                continue
+
+            devices.append(
+                RuntimeDevice(
+                    name=entry.name,
+                    sysfs_path=entry_runtime_path,
+                    bus="platform",
+                )
             )
-            for entry in entries
-            if entry.is_dir()
-        )
-        return RuntimeCollection(data=devices)
+
+        return RuntimeCollection(data=tuple(devices), warnings=tuple(warnings))
 
     def collect_drivers(self) -> RuntimeCollection[tuple[RuntimeDriver, ...]]:
         return RuntimeCollection(data=())

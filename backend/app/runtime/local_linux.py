@@ -274,6 +274,9 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
 
         bound_device_paths: list[str] = []
         for entry in entries:
+            if entry.name == "module":
+                continue
+
             entry_runtime_path = f"{runtime_path}/{entry.name}"
             try:
                 entry.readlink()

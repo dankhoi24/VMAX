@@ -599,6 +599,32 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
         )
         self.assertIsNone(result.data[0].module_name)
 
+    def test_collect_drivers_ignores_broken_module_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            drivers_root = _make_platform_drivers_root(fixture_root)
+            module_root = fixture_root / "sys" / "module"
+            module_root.mkdir(parents=True)
+            driver = drivers_root / "serial8250"
+            driver.mkdir()
+            module_link = driver / "module"
+            module_link.touch()
+            module_target = module_root / "serial8250"
+
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            with _patched_driver_symlinks(
+                {module_link: module_target},
+                resolve_errors={
+                    module_link: FileNotFoundError("broken module symlink"),
+                },
+            ):
+                result = provider.collect_drivers()
+
+        self.assertEqual(result.warnings, ())
+        self.assertEqual(len(result.data), 1)
+        self.assertEqual(result.data[0].bound_device_paths, ())
+        self.assertIsNone(result.data[0].module_name)
+
     def test_collect_drivers_reports_broken_bound_device_link(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             fixture_root = Path(root)
@@ -632,6 +658,50 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             "/sys/bus/platform/drivers/serial8250/broken-device",
         )
         self.assertNotIn(str(fixture_root), result.warnings[0].message)
+
+    def test_collect_drivers_keeps_valid_bound_devices_when_one_link_fails(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            drivers_root = _make_platform_drivers_root(fixture_root)
+            sysfs_devices_root = _make_sysfs_devices_root(fixture_root)
+            driver = drivers_root / "serial8250"
+            driver.mkdir()
+            valid_link = driver / "107d001000.serial"
+            broken_link = driver / "broken-device"
+            valid_link.touch()
+            broken_link.touch()
+            valid_target = sysfs_devices_root / "platform" / valid_link.name
+            broken_target = sysfs_devices_root / "platform" / broken_link.name
+            valid_target.mkdir(parents=True)
+
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            with _patched_driver_symlinks(
+                {
+                    valid_link: valid_target,
+                    broken_link: broken_target,
+                },
+                resolve_errors={
+                    broken_link: FileNotFoundError("broken symlink"),
+                },
+            ):
+                result = provider.collect_drivers()
+
+        self.assertEqual(len(result.data), 1)
+        self.assertEqual(
+            result.data[0].bound_device_paths,
+            ("/sys/bus/platform/devices/107d001000.serial",),
+        )
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(
+            result.warnings[0].code,
+            "SYSFS_PLATFORM_DRIVER_BOUND_DEVICE_READ_FAILED",
+        )
+        self.assertEqual(
+            result.warnings[0].source_path,
+            "/sys/bus/platform/drivers/serial8250/broken-device",
+        )
 
     def test_collect_drivers_reports_missing_platform_drivers_directory(self) -> None:
         with tempfile.TemporaryDirectory() as root:

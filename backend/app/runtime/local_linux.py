@@ -16,6 +16,7 @@ from app.runtime.provider import RuntimeProvider
 
 
 PathInput = str | os.PathLike[str]
+PLATFORM_DEVICES_PATH = "bus/platform/devices"
 
 
 class LocalLinuxRuntimeProvider(RuntimeProvider):
@@ -64,7 +65,37 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
         )
 
     def collect_devices(self) -> RuntimeCollection[tuple[RuntimeDevice, ...]]:
-        return RuntimeCollection(data=())
+        warnings: list[RuntimeWarning] = []
+        runtime_path = self._sysfs_runtime_path(PLATFORM_DEVICES_PATH)
+
+        try:
+            entries = sorted(
+                self._sysfs_access_path(PLATFORM_DEVICES_PATH).iterdir(),
+                key=lambda entry: entry.name,
+            )
+        except OSError as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="SYSFS_PLATFORM_DEVICES_READ_FAILED",
+                    source_path=runtime_path,
+                    message=(
+                        f"Unable to read {runtime_path}: "
+                        f"{_format_error(error)}"
+                    ),
+                )
+            )
+            return RuntimeCollection(data=(), warnings=tuple(warnings))
+
+        devices = tuple(
+            RuntimeDevice(
+                name=entry.name,
+                sysfs_path=f"{runtime_path}/{entry.name}",
+                bus="platform",
+            )
+            for entry in entries
+            if entry.is_dir()
+        )
+        return RuntimeCollection(data=devices)
 
     def collect_drivers(self) -> RuntimeCollection[tuple[RuntimeDriver, ...]]:
         return RuntimeCollection(data=())

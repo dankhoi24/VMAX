@@ -9,6 +9,7 @@ from pathlib import Path
 from app.runtime import (
     LocalLinuxRuntimeProvider,
     RuntimeCollection,
+    RuntimeDevice,
     RuntimeProvider,
     RuntimeSystemInfo,
 )
@@ -183,6 +184,88 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
         self.assertEqual(len(result.warnings), 1)
         self.assertEqual(result.warnings[0].code, "HOSTNAME_READ_FAILED")
 
+    def test_collect_devices_enumerates_platform_device_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            devices_root = _make_platform_devices_root(fixture_root)
+            (devices_root / "107d001000.serial").mkdir()
+            (devices_root / "1000fff000.mmc").mkdir()
+            (devices_root / "fixedregulator_3v3").mkdir()
+            (devices_root / "README").write_text("not a device", encoding="utf-8")
+
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            result = provider.collect_devices()
+
+        self.assertEqual(result.warnings, ())
+        self.assertEqual(
+            tuple(device.name for device in result.data),
+            (
+                "1000fff000.mmc",
+                "107d001000.serial",
+                "fixedregulator_3v3",
+            ),
+        )
+        self.assertEqual(
+            tuple(device.sysfs_path for device in result.data),
+            (
+                "/sys/bus/platform/devices/1000fff000.mmc",
+                "/sys/bus/platform/devices/107d001000.serial",
+                "/sys/bus/platform/devices/fixedregulator_3v3",
+            ),
+        )
+        for device in result.data:
+            self.assertEqual(device.bus, "platform")
+            self.assertIsNone(device.driver_name)
+            self.assertIsNone(device.driver_path)
+            self.assertIsNone(device.of_node_sysfs_path)
+            self.assertEqual(device.resources, ())
+            self.assertNotIn(str(fixture_root), device.sysfs_path)
+
+    def test_collect_devices_returns_empty_collection_for_empty_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            _make_platform_devices_root(fixture_root)
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            result = provider.collect_devices()
+
+        self.assertEqual(result.data, ())
+        self.assertEqual(result.warnings, ())
+
+    def test_collect_devices_reports_missing_platform_devices_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            provider = LocalLinuxRuntimeProvider(sysfs_root=fixture_root / "sys")
+            result = provider.collect_devices()
+
+        self.assertEqual(result.data, ())
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(
+            result.warnings[0].code,
+            "SYSFS_PLATFORM_DEVICES_READ_FAILED",
+        )
+        self.assertEqual(
+            result.warnings[0].source_path,
+            "/sys/bus/platform/devices",
+        )
+        self.assertNotIn(str(fixture_root), result.warnings[0].message)
+
+    def test_collect_devices_reports_platform_devices_read_error(self) -> None:
+        provider = LocalLinuxRuntimeProvider(sysfs_root=Path("/fixture/sys"))
+
+        with patch.object(Path, "iterdir", side_effect=PermissionError("denied")):
+            result = provider.collect_devices()
+
+        self.assertEqual(result.data, ())
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(
+            result.warnings[0].code,
+            "SYSFS_PLATFORM_DEVICES_READ_FAILED",
+        )
+        self.assertEqual(
+            result.warnings[0].source_path,
+            "/sys/bus/platform/devices",
+        )
+
     def test_fixture_roots_change_access_paths_not_runtime_paths(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             fixture_root = Path(root)
@@ -225,15 +308,26 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             LocalLinuxRuntimeProvider(proc_root="")
 
     def test_provider_satisfies_runtime_provider_contract(self) -> None:
-        provider: RuntimeProvider = LocalLinuxRuntimeProvider()
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            _make_platform_devices_root(fixture_root)
+            provider: RuntimeProvider = LocalLinuxRuntimeProvider(
+                sysfs_root=fixture_root / "sys",
+                proc_root=fixture_root / "proc",
+            )
 
-        system_info = provider.collect_system_info()
-        devices = provider.collect_devices()
-        drivers = provider.collect_drivers()
-        iomem = provider.collect_iomem()
+            system_info = provider.collect_system_info()
+            devices = provider.collect_devices()
+            drivers = provider.collect_drivers()
+            iomem = provider.collect_iomem()
 
         self.assertIsInstance(system_info, RuntimeCollection)
         self.assertIsInstance(system_info.data, RuntimeSystemInfo)
+        self.assertIsInstance(devices, RuntimeCollection)
+        self.assertEqual(
+            tuple(isinstance(device, RuntimeDevice) for device in devices.data),
+            (),
+        )
         self.assertEqual(devices.data, ())
         self.assertEqual(devices.warnings, ())
         self.assertEqual(drivers.data, ())
@@ -275,3 +369,9 @@ class _PatchedRuntime:
     def __exit__(self, *args: object) -> None:
         for patcher in reversed(self._patches):
             patcher.stop()
+
+
+def _make_platform_devices_root(fixture_root: Path) -> Path:
+    devices_root = fixture_root / "sys" / "bus" / "platform" / "devices"
+    devices_root.mkdir(parents=True)
+    return devices_root

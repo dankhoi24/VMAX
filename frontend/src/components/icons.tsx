@@ -13,6 +13,26 @@ export function AddressingIcon({ className }: IconProps) {
   );
 }
 
+export function CursorIcon({ className }: IconProps) {
+  return (
+    <svg className={className} aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M5 3 19 14l-7 1-4 6-3-18Z" />
+      <path d="m12 15 4 5" />
+    </svg>
+  );
+}
+
+export function HandIcon({ className }: IconProps) {
+  return (
+    <svg className={className} aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M8 12V6a2 2 0 0 1 4 0v5" />
+      <path d="M12 11V5a2 2 0 0 1 4 0v7" />
+      <path d="M16 12V8a2 2 0 0 1 4 0v5" />
+      <path d="M8 12 7 10a2 2 0 0 0-3.6 1.7l3.7 7A4 4 0 0 0 10.6 21H16a4 4 0 0 0 4-4v-4" />
+    </svg>
+  );
+}
+
 export function CheckIcon({ className }: IconProps) {
   return (
     <svg className={className} aria-hidden="true" viewBox="0 0 24 24">

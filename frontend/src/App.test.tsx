@@ -206,6 +206,29 @@ describe("App", () => {
     expect(screen.getByText("ranges[0]")).toBeTruthy();
   });
 
+  it("selects and expands a node from the address space map", async () => {
+    stubApi();
+
+    const { container } = render(<App />);
+
+    expect(await screen.findByRole("tab", { name: "Properties" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Address Space" }));
+    expect(container.querySelector(".workspace-grid-address-space")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Select address region /soc@107c000000/uart@1000",
+      }),
+    );
+
+    expect(screen.getByRole("button", { name: /^uart@1000$/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Properties" }));
+
+    expect(screen.getByText("clock-frequency")).toBeTruthy();
+    expect(screen.getByText("[24000000]")).toBeTruthy();
+  });
+
   it("renders the Device Tree before delayed addressing data resolves", async () => {
     const addressing = createDeferred<Response>();
     stubApi({ addressingResponse: addressing.promise });

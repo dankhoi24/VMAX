@@ -35,6 +35,40 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             self.assertEqual(provider.sysfs_root, sysfs_root)
             self.assertEqual(provider.proc_root, proc_root)
 
+    def test_fixture_roots_change_access_paths_not_runtime_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            provider = LocalLinuxRuntimeProvider(
+                sysfs_root=fixture_root / "sys",
+                proc_root=fixture_root / "proc",
+            )
+
+            self.assertEqual(
+                provider._sysfs_access_path("bus/platform/devices/foo"),
+                fixture_root / "sys" / "bus/platform/devices/foo",
+            )
+            self.assertEqual(
+                provider._proc_access_path("iomem"),
+                fixture_root / "proc" / "iomem",
+            )
+            self.assertEqual(
+                provider._sysfs_runtime_path("bus/platform/devices/foo"),
+                "/sys/bus/platform/devices/foo",
+            )
+            self.assertEqual(
+                provider._proc_runtime_path("iomem"),
+                "/proc/iomem",
+            )
+
+    def test_helper_relative_paths_must_not_be_empty_or_absolute(self) -> None:
+        provider = LocalLinuxRuntimeProvider()
+
+        with self.assertRaisesRegex(ValueError, "relative_path must not be empty"):
+            provider._sysfs_access_path("")
+
+        with self.assertRaisesRegex(ValueError, "relative_path must be relative"):
+            provider._proc_runtime_path("/iomem")
+
     def test_rejects_empty_root_paths(self) -> None:
         with self.assertRaisesRegex(ValueError, "sysfs_root must not be empty"):
             LocalLinuxRuntimeProvider(sysfs_root="")

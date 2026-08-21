@@ -2,9 +2,9 @@
 
 VMAX is an **Embedded System Topology & Correlation Explorer** for understanding how firmware description, operating-system runtime state, and hardware resources relate to each other.
 
-The project starts with Device Tree exploration and is designed to grow toward correlation across devices, drivers, MMIO, IRQs, DMA/IOMMU/IOVA, kernel symbols, snapshots, and SoC-specific plugins.
+The project starts with Device Tree exploration and grows toward correlation across devices, drivers, MMIO, IRQs, DMA/IOMMU/IOVA, kernel symbols, snapshots, runtime events, and SoC-specific plugins.
 
-> **v0.2.0 — Memory/MMIO Map:** the second public development release of VMAX, adding semantic Device Tree address analysis, address-translation tracing, and an interactive physical address-space map on top of the v0.1 Device Tree Explorer.
+> **v0.3.0 — Linux Runtime Explorer:** adds live Linux runtime inspection from `/sys` and `/proc`, including devices, driver bindings, system metadata, `/proc/iomem`, local collection, and remote SSH collection for embedded targets.
 
 ## Why VMAX
 
@@ -18,70 +18,55 @@ Low-level Linux and embedded debugging often requires jumping between multiple v
 - DMA and IOMMU mappings
 - kernel symbols and runtime events
 
-VMAX aims to correlate those views into one consistent model instead of treating them as separate tools and files.
+VMAX aims to bring those views into one consistent model instead of treating them as separate tools and files.
 
-## v0.2.0 scope
+## v0.3.0 scope
 
-VMAX v0.2.0 extends the Device Tree exploration path with semantic address analysis:
+VMAX v0.3.0 builds on the static Device Tree and address-space analysis from v0.1/v0.2 with a Linux runtime view:
 
 ```text
-.dtb
-  |
-  v
-pylibfdt
-  |
-  v
-LibFdtDeviceTreeParser
-  |
-  v
-DeviceTree domain model
-  |
-  +--> AddressCellContextResolver
-  +--> RegInterpreter
-  +--> RangesInterpreter / RangesTranslator
-  +--> MemoryRegionClassifier
-  |
-  v
-AddressingReport
-  |
-  v
-FastAPI + Pydantic API schema
-  |
-  | JSON
-  v
-TypeScript API client
-  |
-  v
-React
-  ├── Search
-  ├── DeviceTreeView
-  ├── PropertyPanel
-  ├── AddressingPanel
-  ├── TranslationTrace
-  └── AddressSpaceMap
+                         VMAX
+                          |
+          +---------------+---------------+
+          |                               |
+   Static Device Tree                Linux Runtime
+          |                               |
+        DTB file                     /sys + /proc
+          |                               |
+   pylibfdt parser                RuntimeProvider
+          |                               |
+   DeviceTree model          +------------+------------+
+          |                  |                         |
+   AddressingReport      Local transport           SSH transport
+          |                  |                         |
+          +------------------+-------------------------+
+                             |
+                         FastAPI
+                             |
+                         React UI
 ```
 
-Implemented in v0.2.0:
+Implemented in v0.3.0:
 
 - all v0.1.0 Device Tree parsing, browsing, property inspection, and search capabilities
-- addressing domain models for cell contexts, `reg` resources, range mappings, translations, memory regions, and structured warnings
-- `#address-cells` and `#size-cells` context resolution with provenance
-- Device Tree `reg` interpretation, including multiple resources per node
-- `ranges` interpretation and child-bus to parent-bus / CPU address translation
-- explicit distinction between missing `ranges` and empty identity `ranges`
-- translation provenance through `TranslationStep` records
-- RAM, reserved-memory, and device-region classification
-- conservative handling of unsupported bus address formats without fabricating translations
-- 64-bit / greater-than-4-GiB address preservation
-- FastAPI addressing endpoint and typed frontend addressing models
-- selected-node Addressing panel with exact hexadecimal values
-- Translation Trace for bus-to-CPU provenance
-- interactive Address Space Map with BigInt-safe address handling
-- map support for overlaps, nesting, gaps, clusters, selection, zoom, pan, Fit All, and Fit Selected
-- progressive loading so Device Tree browsing remains usable while addressing data resolves
-- backend unit/integration coverage plus real Raspberry Pi 5 DTB semantic validation
+- all v0.2.0 Device Tree addressing, `reg` / `ranges` interpretation, translation tracing, and physical address-space visualization
+- Linux runtime domain models for system metadata, devices, drivers, resources, `/proc/iomem`, and structured warnings
+- Linux system metadata from runtime sources, including hostname, `uname`, architecture normalization, and `/proc/cmdline`
+- platform-device inventory from sysfs
+- current driver binding metadata when a runtime device exposes a driver symlink
+- runtime `of_node` sysfs metadata without claiming Device Tree correlation
+- platform-driver inventory and bound-device information
+- hierarchical `/proc/iomem` parsing and runtime physical address visualization
+- partial-data semantics: inaccessible or missing runtime data becomes structured warnings instead of collapsing the whole scan
+- local runtime transport for inspecting the machine running the backend
+- SSH runtime transport for inspecting a remote embedded Linux target without installing VMAX, Python, FastAPI, or Node.js on the target
+- secure SSH host-key verification by default, with an explicit opt-in for accepting unknown host keys in controlled lab environments
+- frontend Runtime Device Browser and Runtime Address Map
+- real-board validation using a Renesas R-Car Linux target over SSH
 
-v0.2.0 intentionally does **not** yet include `/proc`, `/sys`, runtime driver correlation, runtime MMIO ownership, IRQ runtime data, DMA/IOMMU/IOVA mappings, PCI-specific 3-cell address semantics, WebSocket events, or SoC-specific runtime behavior.
+v0.3.0 intentionally does **not** yet claim Device Tree ↔ Linux runtime correlation. In particular, it does not infer that a Device Tree node owns a runtime device, that a static Device Tree region is owned by a particular runtime driver, or that a compatible string maps to a currently bound driver. Those correlations are the focus of v0.4.
+
+Runtime resources are reported only when a real runtime source exposes them. VMAX does not fabricate generic platform-device resources from interfaces that Linux does not provide as a stable platform-bus ABI.
 
 ## Architecture direction
 
@@ -129,8 +114,8 @@ SoC plugins
 
 - **v0.1 — Device Tree Explorer**: DTB parsing, domain model, API, tree browser, property panel, search — **complete**
 - **v0.2 — Memory/MMIO Map**: `reg`, `ranges`, address cells, memory regions, translation trace, address-space map — **complete**
-- **v0.3 — Linux Runtime Explorer**: `/sys`, `/proc`, devices and runtime resources — **next**
-- **v0.4 — DT ↔ Device ↔ Driver correlation**
+- **v0.3 — Linux Runtime Explorer**: `/sys`, `/proc`, runtime devices/drivers, `/proc/iomem`, local/SSH transport — **complete**
+- **v0.4 — DT ↔ Device ↔ Driver correlation** — **next**
 - **v0.5 — IRQ and dependency graph**
 - **v0.6 — PCIe topology and snapshots**
 - **v0.7 — IOMMU/DMA foundation**
@@ -150,6 +135,7 @@ backend/
 │   ├── collectors/
 │   ├── model/
 │   ├── parsers/
+│   ├── runtime/
 │   └── services/
 └── tests/
 
@@ -167,159 +153,158 @@ frontend/
 
 ## Run VMAX
 
-A convenient Windows development setup is:
+VMAX can inspect either the local Linux machine running the backend or a remote embedded Linux target over SSH.
+
+Typical embedded-target deployment:
 
 ```text
-Windows
-└── React / Vite frontend
-    └── http://localhost:5173
-            |
-            | /api proxy
-            v
-WSL / Ubuntu
-└── FastAPI backend
-    └── http://localhost:8000
-            |
-            v
-        pylibfdt
-            |
-            v
-           DTB
+Developer browser
+      |
+      v
+React / Vite on HOST :5173
+      |
+      | /api proxy
+      v
+FastAPI on HOST :8000
+      |
+      +--> local DTB file
+      |
+      +--> SSH --> Embedded Linux target
+                    ├── /sys
+                    └── /proc
 ```
 
-The source repository can remain on the Windows filesystem. For example:
+The target does not need VMAX, Python, FastAPI, Node.js, or npm. It only needs SSH access plus the Linux runtime interfaces that VMAX reads.
+
+### 1. Backend prerequisites
+
+VMAX uses Python 3.11+ and `uv` for dependency management.
+
+Install the backend with the features needed for Device Tree and SSH runtime inspection:
+
+```bash
+uv sync --extra dev --extra all
+```
+
+The optional dependency groups are:
 
 ```text
-Windows: C:\Users\<USER>\Documents\VMAX
-WSL:     /mnt/c/Users/<USER>/Documents/VMAX
+dtb  -> pylibfdt
+ssh  -> paramiko
+all  -> dtb + ssh
 ```
 
-### 1. Frontend prerequisites on Windows
+### 2. Configure a Device Tree source
 
-Install a Node.js LTS release, then verify:
-
-```powershell
-node --version
-npm --version
-```
-
-Install the frontend dependencies from PowerShell:
-
-```powershell
-cd C:\Users\<USER>\Documents\VMAX\frontend
-npm install
-```
-
-Optional validation:
-
-```powershell
-npm test
-npm run typecheck
-npm run build
-```
-
-### 2. Backend prerequisites in WSL / Ubuntu
-
-Open WSL and install the native tools required to build `pylibfdt`:
+VMAX's static Device Tree view is independent from the Linux runtime view. Select a DTB file with:
 
 ```bash
-sudo apt update
-sudo apt install -y curl build-essential swig python3-dev
+export VMAX_DTB_PATH=/path/to/board.dtb
 ```
 
-Install `uv` with the official standalone installer if it is not already available:
+For a running Linux target that exposes `/sys/firmware/fdt`, a convenient workflow is to copy that blob to the host and point `VMAX_DTB_PATH` at the copied file.
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source ~/.bashrc
-uv --version
-```
+### 3. Local Linux runtime mode
 
-Because the repository is shared with Windows, keep the Linux Python environment outside the repository so it does not conflict with a Windows `.venv`:
-
-```bash
-mkdir -p ~/.venvs
-export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/vmax-wsl"
-```
-
-Change to the same repository through the WSL mount and install the backend dependencies, including the DTB parser extra:
-
-```bash
-cd /mnt/c/Users/<USER>/Documents/VMAX
-uv sync --extra dev --extra dtb
-```
-
-Verify the `libfdt` Python module:
-
-```bash
-uv run python -c "import libfdt; print(libfdt.__file__)"
-```
-
-### 3. Start the backend in WSL
-
-Select the DTB that VMAX should load:
+If `VMAX_RUNTIME_SSH_TARGET` is not set, the backend collects runtime data from the local machine:
 
 ```bash
 export PYTHONPATH=backend
-export VMAX_DTB_PATH=/mnt/c/Users/<USER>/Downloads/bcm2712-rpi-5-b.dtb
-```
-
-Start FastAPI/Uvicorn:
-
-```bash
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The backend should now be available at:
+### 4. Remote SSH runtime mode
 
-```text
-http://localhost:8000
+Configure the remote target before starting the backend:
+
+```bash
+export VMAX_RUNTIME_SSH_TARGET=192.168.0.2
+export VMAX_RUNTIME_SSH_USER=root
+```
+
+Authentication may use a key:
+
+```bash
+export VMAX_RUNTIME_SSH_KEY=/path/to/private_key
+```
+
+or a password:
+
+```bash
+read -s -p "Target password: " VMAX_RUNTIME_SSH_PASSWORD
+export VMAX_RUNTIME_SSH_PASSWORD
+```
+
+Optional SSH configuration:
+
+```bash
+export VMAX_RUNTIME_SSH_PORT=22
+export VMAX_RUNTIME_SYSFS_ROOT=/sys
+export VMAX_RUNTIME_PROC_ROOT=/proc
+```
+
+VMAX verifies SSH host keys by default. For a controlled lab target where accepting an unknown key is intentional, this can be explicitly enabled:
+
+```bash
+export VMAX_RUNTIME_SSH_ACCEPT_UNKNOWN_HOST_KEY=1
+```
+
+Do not use that setting as a substitute for host-key verification in normal deployments.
+
+Start the backend:
+
+```bash
+export PYTHONPATH=backend
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 Useful endpoints:
 
 ```text
-GET http://localhost:8000/api/v1/metadata
-GET http://localhost:8000/api/v1/devicetree
-GET http://localhost:8000/api/v1/addressing
+GET /api/v1/metadata
+GET /api/v1/devicetree
+GET /api/v1/addressing
+GET /api/v1/runtime/metadata
+GET /api/v1/runtime/devices
+GET /api/v1/runtime/drivers
+GET /api/v1/runtime/iomem
 ```
 
-### 4. Start the frontend on Windows
+### 5. Start the frontend
 
-In a second terminal:
+Install a current Node.js LTS release, then from `frontend/`:
 
-```powershell
-cd C:\Users\<USER>\Documents\VMAX\frontend
-npm run dev
+```bash
+npm install
+npm run dev -- --host 0.0.0.0
 ```
 
-Vite normally starts the frontend at:
+Vite normally starts on port `5173` and proxies `/api` to the backend on port `8000`.
 
-```text
-http://localhost:5173
-```
+### 6. Expected result
 
-Open that URL in a browser. The Vite development server proxies `/api` requests to the FastAPI backend on port `8000`, so no backend URL needs to be hard-coded in the frontend.
-
-### 5. Expected result
-
-With both processes running, the browser provides:
+With the static DTB and runtime backend configured, the browser provides:
 
 - expandable/collapsible Device Tree navigation
 - selected-node property inspection
 - decoded property values with optional raw-hex inspection
-- local search and navigation to matching nodes
-- semantic `reg` / `ranges` address information for selected nodes
+- Device Tree search and navigation
+- semantic `reg` / `ranges` addressing information
 - bus-to-CPU Translation Trace
-- interactive physical Address Space Map
+- static physical Address Space Map
+- Linux runtime system metadata
+- runtime platform-device and driver browsing
+- bound-driver and runtime `of_node` metadata when exposed by sysfs
+- runtime `/proc/iomem` visualization
+- structured warnings for partial runtime data
 
 ## Tests
 
-Run backend tests from the repository root in the Python environment:
+Run backend tests from the repository root:
 
 ```bash
 export PYTHONPATH=backend
-uv run --extra dev --extra dtb python -m unittest discover -s backend/tests -v
+uv run --extra dev --extra all python -m unittest discover -s backend/tests -v
 ```
 
 Run frontend tests, type checking, and the production build from `frontend/`:
@@ -330,38 +315,39 @@ npm run typecheck
 npm run build
 ```
 
-The real-DTB backend path requires the `libfdt` Python binding (`pylibfdt`).
-
 ## Validation
 
-v0.2.0 addressing semantics have been validated with a real Raspberry Pi 5 DTB through the production parser and addressing pipeline.
+v0.3.0 has been validated through backend regression testing, frontend test/typecheck/build validation, and manual runtime validation against a real Renesas R-Car Linux target over SSH.
 
-The real-DTB validation covers:
+The runtime validation covers:
 
-- exact RAM and fixed reserved-memory regions
-- no fabricated static region for dynamic CMA without `reg`
-- simple-bus `ranges` translation with exact bus and CPU addresses
-- translation provenance
-- multiple `reg` resources
-- addresses above 4 GiB
-- structured handling of unsupported PCI 3-cell address formats
+- remote hostname and `uname` metadata
+- architecture normalization
+- `/proc/cmdline`
+- platform-device inventory
+- current driver bindings
+- runtime `of_node` metadata
+- platform-driver inventory
+- `/proc/iomem`
+- browser rendering of the runtime views
+- remote collection through the SSH transport while the VMAX backend/frontend remain on the host
 
-The full frontend regression suite, TypeScript type check, production build, and backend regression suite are part of the release validation workflow.
-
-The earlier v0.1 Device Tree Explorer was also manually exercised with Raspberry Pi 5 and two Renesas R-Car DTB configurations for parsing, tree browsing, property inspection, search, navigation, and reload behavior.
+The v0.2.0 addressing semantics were also validated with a real Raspberry Pi 5 DTB through the production parser and addressing pipeline, including exact RAM/reserved-memory regions, simple-bus translation, translation provenance, multiple `reg` resources, addresses above 4 GiB, and conservative handling of unsupported PCI 3-cell address formats.
 
 ## Design principles
 
 - **Preserve raw data**: decoded values never replace the original DTB bytes.
 - **Prefer known semantics over heuristics**: property-name knowledge wins over byte-pattern guessing.
-- **Be conservative when uncertain**: unsupported or ambiguous address semantics produce structured warnings rather than fabricated mappings.
+- **Be conservative when uncertain**: unsupported or ambiguous semantics produce structured warnings rather than fabricated mappings.
 - **Keep libfdt behind an adapter boundary**: pylibfdt objects do not leak into the domain model.
-- **Separate syntax from semantics**: parsing/decoding stays separate from addressing interpretation and future runtime correlation.
-- **Keep the core generic**: platform-specific support should build on the same parser, model, and addressing contracts.
+- **Separate syntax from semantics**: parsing/decoding stays separate from addressing interpretation and runtime correlation.
+- **Separate static and runtime truth**: Device Tree and Linux runtime views remain distinct until an explicit correlation layer connects them.
+- **Keep the core generic**: platform-specific support should build on common parser, model, provider, and transport contracts.
 - **Preserve provenance**: translated addresses retain the bus/range steps that produced them.
+- **Prefer partial observability over fabricated certainty**: unavailable runtime information becomes a warning, not an invented value.
 
 ## Project status
 
-VMAX v0.2.0 is the second public development release. It adds static Device Tree memory/MMIO semantics and address-space visualization while the project remains pre-1.0.
+VMAX v0.3.0 is the third public development release. It adds live Linux runtime visibility and remote SSH collection on top of the existing Device Tree and static address-space explorers.
 
-The next milestone is **v0.3 — Linux Runtime Explorer**, which will add `/sys` and `/proc` runtime data as the foundation for Device Tree ↔ runtime correlation.
+The next milestone is **v0.4 — DT ↔ Device ↔ Driver correlation**, where the currently separate static and runtime models will begin to be connected explicitly.

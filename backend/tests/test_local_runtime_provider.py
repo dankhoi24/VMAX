@@ -147,12 +147,12 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             provider = LocalLinuxRuntimeProvider(proc_root=proc_root)
 
             with patch(
-                "app.runtime.local_linux.os.uname",
+                "app.runtime.transport.os.uname",
                 side_effect=OSError("uname failed"),
                 create=True,
             ):
                 with patch(
-                    "app.runtime.local_linux.socket.gethostname",
+                    "app.runtime.transport.socket.gethostname",
                     return_value="pi5",
                 ):
                     result = provider.collect_system_info()
@@ -174,7 +174,7 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
 
             with _patched_runtime(machine="aarch64"):
                 with patch(
-                    "app.runtime.local_linux.socket.gethostname",
+                    "app.runtime.transport.socket.gethostname",
                     side_effect=OSError("hostname failed"),
                 ):
                     result = provider.collect_system_info()
@@ -992,12 +992,12 @@ class _PatchedRuntime:
         self._uname = uname
         self._patches = (
             patch(
-                "app.runtime.local_linux.os.uname",
+                "app.runtime.transport.os.uname",
                 return_value=uname,
                 create=True,
             ),
             patch(
-                "app.runtime.local_linux.socket.gethostname",
+                "app.runtime.transport.socket.gethostname",
                 return_value="pi5",
             ),
         )

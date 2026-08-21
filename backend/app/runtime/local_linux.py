@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import errno
-import os
-import socket
 from pathlib import Path
 
 from app.runtime.model import (
@@ -15,44 +13,45 @@ from app.runtime.model import (
 )
 from app.runtime.iomem import parse_proc_iomem_file
 from app.runtime.provider import RuntimeProvider
+from app.runtime.transport import (
+    LocalRuntimeTransport,
+    PathInput,
+    RuntimeTransport,
+    RuntimeTransportUnavailable,
+    normalize_relative_path,
+)
 
 
-PathInput = str | os.PathLike[str]
 PLATFORM_DEVICES_PATH = "bus/platform/devices"
 PLATFORM_DRIVERS_PATH = "bus/platform/drivers"
 SYSFS_DEVICES_RUNTIME_PREFIX = "/sys/devices/"
 WINDOWS_NOT_A_REPARSE_POINT = 4390
 
 
-class LocalLinuxRuntimeProvider(RuntimeProvider):
-    """Runtime provider backed by local filesystem roots.
+class LinuxRuntimeProvider(RuntimeProvider):
+    """Linux runtime provider backed by a runtime transport.
 
-    sysfs_root and proc_root are access paths used to read files. Domain model
-    paths produced by this provider should stay canonical target paths under
-    /sys and /proc, even when tests read from fixture roots.
+    Transport roots are access paths used to read files. Domain model paths
+    produced by this provider should stay canonical target paths under /sys and
+    /proc, even when tests read from fixture roots or future remote targets.
     """
 
-    def __init__(
-        self,
-        sysfs_root: PathInput = Path("/sys"),
-        proc_root: PathInput = Path("/proc"),
-    ) -> None:
-        self._sysfs_root = _normalize_root(sysfs_root, "sysfs_root")
-        self._proc_root = _normalize_root(proc_root, "proc_root")
+    def __init__(self, transport: RuntimeTransport) -> None:
+        self._transport = transport
 
     @property
     def sysfs_root(self) -> Path:
-        return self._sysfs_root
+        return self._transport.sysfs_root
 
     @property
     def proc_root(self) -> Path:
-        return self._proc_root
+        return self._transport.proc_root
 
     def collect_system_info(self) -> RuntimeCollection[RuntimeSystemInfo]:
         warnings: list[RuntimeWarning] = []
 
-        uname = _read_uname(warnings)
-        hostname = _read_hostname(warnings)
+        uname = self._read_uname(warnings)
+        hostname = self._read_hostname(warnings)
         cmdline = self._read_proc_cmdline(warnings)
         machine = getattr(uname, "machine", None) if uname is not None else None
 
@@ -75,7 +74,9 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
 
         try:
             entries = sorted(
-                self._sysfs_access_path(PLATFORM_DEVICES_PATH).iterdir(),
+                self._transport.iterdir(
+                    self._sysfs_access_path(PLATFORM_DEVICES_PATH)
+                ),
                 key=lambda entry: entry.name,
             )
         except OSError as error:
@@ -96,7 +97,7 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
             entry_runtime_path = f"{runtime_path}/{entry.name}"
             try:
                 # sysfs device entries are usually symlinks; is_dir follows them.
-                if not entry.is_dir():
+                if not self._transport.is_dir(entry):
                     continue
             except OSError as error:
                 warnings.append(
@@ -138,7 +139,9 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
 
         try:
             entries = sorted(
-                self._sysfs_access_path(PLATFORM_DRIVERS_PATH).iterdir(),
+                self._transport.iterdir(
+                    self._sysfs_access_path(PLATFORM_DRIVERS_PATH)
+                ),
                 key=lambda entry: entry.name,
             )
         except OSError as error:
@@ -158,7 +161,7 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
         for entry in entries:
             entry_runtime_path = f"{runtime_path}/{entry.name}"
             try:
-                if not entry.is_dir():
+                if not self._transport.is_dir(entry):
                     continue
             except OSError as error:
                 warnings.append(
@@ -190,7 +193,10 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
     def collect_iomem(self) -> RuntimeCollection[tuple[IomemRegion, ...]]:
         runtime_path = self._proc_runtime_path("iomem")
         try:
-            text = self._proc_access_path("iomem").read_text(encoding="utf-8")
+            text = self._transport.read_text(
+                self._proc_access_path("iomem"),
+                encoding="utf-8",
+            )
         except (OSError, UnicodeError) as error:
             return RuntimeCollection(
                 data=(),
@@ -209,16 +215,10 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
         return parse_proc_iomem_file(text, runtime_path)
 
     def _sysfs_access_path(self, relative_path: PathInput) -> Path:
-        return self._sysfs_root / _normalize_relative_path(
-            relative_path,
-            "sysfs relative_path",
-        )
+        return self._transport.sysfs_path(relative_path)
 
     def _proc_access_path(self, relative_path: PathInput) -> Path:
-        return self._proc_root / _normalize_relative_path(
-            relative_path,
-            "proc relative_path",
-        )
+        return self._transport.proc_path(relative_path)
 
     def _sysfs_runtime_path(self, relative_path: PathInput) -> str:
         return _runtime_path("/sys", relative_path, "sysfs relative_path")
@@ -236,7 +236,7 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
         driver_link = self._sysfs_access_path(relative_path)
 
         try:
-            driver_link.readlink()
+            self._transport.readlink(driver_link)
         except FileNotFoundError:
             return None, None
         except OSError as error:
@@ -253,7 +253,7 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
             return None, None
 
         try:
-            target = driver_link.resolve(strict=True)
+            target = self._transport.resolve(driver_link, strict=True)
             driver_path = self._sysfs_runtime_path_from_access_path(target)
         except (OSError, ValueError) as error:
             warnings.append(
@@ -280,7 +280,7 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
         of_node_link = self._sysfs_access_path(relative_path)
 
         try:
-            of_node_link.readlink()
+            self._transport.readlink(of_node_link)
         except FileNotFoundError:
             return None
         except OSError as error:
@@ -297,7 +297,7 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
             return None
 
         try:
-            target = of_node_link.resolve(strict=True)
+            target = self._transport.resolve(of_node_link, strict=True)
             return self._sysfs_runtime_path_from_access_path(target)
         except (OSError, ValueError) as error:
             warnings.append(
@@ -322,7 +322,7 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
 
         try:
             entries = sorted(
-                self._sysfs_access_path(relative_path).iterdir(),
+                self._transport.iterdir(self._sysfs_access_path(relative_path)),
                 key=lambda entry: entry.name,
             )
         except OSError as error:
@@ -345,7 +345,7 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
 
             entry_runtime_path = f"{runtime_path}/{entry.name}"
             try:
-                entry.readlink()
+                self._transport.readlink(entry)
             except OSError as error:
                 if _is_not_symlink_error(error):
                     continue
@@ -362,7 +362,7 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
                 continue
 
             try:
-                target = entry.resolve(strict=True)
+                target = self._transport.resolve(entry, strict=True)
                 target_runtime_path = self._sysfs_runtime_path_from_access_path(target)
             except (OSError, ValueError) as error:
                 warnings.append(
@@ -388,7 +388,7 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
 
     def _sysfs_runtime_path_from_access_path(self, access_path: Path) -> str:
         try:
-            relative_path = access_path.relative_to(self._sysfs_root)
+            relative_path = access_path.relative_to(self.sysfs_root)
         except ValueError as error:
             raise ValueError("sysfs access path is outside sysfs_root") from error
         return self._sysfs_runtime_path(relative_path)
@@ -396,7 +396,10 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
     def _read_proc_cmdline(self, warnings: list[RuntimeWarning]) -> str | None:
         runtime_path = self._proc_runtime_path("cmdline")
         try:
-            return self._proc_access_path("cmdline").read_text(encoding="utf-8").strip()
+            return self._transport.read_text(
+                self._proc_access_path("cmdline"),
+                encoding="utf-8",
+            ).strip()
         except (OSError, UnicodeError) as error:
             warnings.append(
                 RuntimeWarning(
@@ -410,64 +413,58 @@ class LocalLinuxRuntimeProvider(RuntimeProvider):
             )
             return None
 
+    def _read_uname(self, warnings: list[RuntimeWarning]) -> object | None:
+        try:
+            return self._transport.uname()
+        except RuntimeTransportUnavailable as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="UNAME_READ_FAILED",
+                    message=f"Unable to read uname: {error}",
+                )
+            )
+            return None
+        except OSError as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="UNAME_READ_FAILED",
+                    message=f"Unable to read uname: {error}",
+                )
+            )
+            return None
 
-def _normalize_root(value: PathInput, field_name: str) -> Path:
-    raw_value = os.fspath(value)
-    if not raw_value.strip():
-        raise ValueError(f"{field_name} must not be empty")
-    return Path(value)
+    def _read_hostname(self, warnings: list[RuntimeWarning]) -> str | None:
+        try:
+            return self._transport.hostname()
+        except OSError as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="HOSTNAME_READ_FAILED",
+                    message=f"Unable to read hostname: {error}",
+                )
+            )
+            return None
 
 
-def _normalize_relative_path(value: PathInput, field_name: str) -> Path:
-    raw_value = os.fspath(value)
-    if not raw_value.strip():
-        raise ValueError(f"{field_name} must not be empty")
+class LocalLinuxRuntimeProvider(LinuxRuntimeProvider):
+    """Compatibility wrapper for collecting Linux runtime data from this host."""
 
-    path = Path(raw_value)
-    if raw_value.startswith(("/", "\\")) or path.is_absolute():
-        raise ValueError(f"{field_name} must be relative")
-    return path
+    def __init__(
+        self,
+        sysfs_root: PathInput = Path("/sys"),
+        proc_root: PathInput = Path("/proc"),
+    ) -> None:
+        super().__init__(
+            LocalRuntimeTransport(
+                sysfs_root=sysfs_root,
+                proc_root=proc_root,
+            )
+        )
 
 
 def _runtime_path(root: str, relative_path: PathInput, field_name: str) -> str:
-    path = _normalize_relative_path(relative_path, field_name)
+    path = normalize_relative_path(relative_path, field_name)
     return f"{root}/{path.as_posix()}"
-
-
-def _read_uname(warnings: list[RuntimeWarning]) -> object | None:
-    uname = getattr(os, "uname", None)
-    if uname is None:
-        warnings.append(
-            RuntimeWarning(
-                code="UNAME_READ_FAILED",
-                message="Unable to read uname: os.uname is not available",
-            )
-        )
-        return None
-
-    try:
-        return uname()
-    except OSError as error:
-        warnings.append(
-            RuntimeWarning(
-                code="UNAME_READ_FAILED",
-                message=f"Unable to read uname: {error}",
-            )
-        )
-        return None
-
-
-def _read_hostname(warnings: list[RuntimeWarning]) -> str | None:
-    try:
-        return socket.gethostname()
-    except OSError as error:
-        warnings.append(
-            RuntimeWarning(
-                code="HOSTNAME_READ_FAILED",
-                message=f"Unable to read hostname: {error}",
-            )
-        )
-        return None
 
 
 def _uname_attr(uname: object | None, name: str) -> str | None:

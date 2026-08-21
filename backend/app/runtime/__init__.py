@@ -10,6 +10,7 @@ from app.runtime.model import (
 )
 from app.runtime.local_linux import LinuxRuntimeProvider, LocalLinuxRuntimeProvider
 from app.runtime.provider import RuntimeProvider
+from app.runtime.ssh_transport import SshRuntimeTransport
 from app.runtime.transport import (
     LocalRuntimeTransport,
     RuntimeTransportError,
@@ -31,6 +32,7 @@ __all__ = [
     "RuntimeProvider",
     "RuntimeResource",
     "RuntimeSystemInfo",
+    "SshRuntimeTransport",
     "RuntimeTransport",
     "RuntimeTransportError",
     "RuntimeTransportUnavailable",

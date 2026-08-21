@@ -13,8 +13,12 @@ dev = [
 dtb = [
     "pylibfdt>=1.7.2",
 ]
+ssh = [
+    "paramiko>=3.4,<5",
+]
 all = [
     "pylibfdt>=1.7.2",
+    "paramiko>=3.4,<5",
 ]
 
 [tool.uv]

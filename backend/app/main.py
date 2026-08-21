@@ -6,7 +6,8 @@ from app.addressing import AddressingAnalyzer
 from app.api.addressing import router as addressing_router
 from app.api.devicetree import router as devicetree_router
 from app.api.runtime import router as runtime_router
-from app.runtime import LocalLinuxRuntimeProvider, RuntimeProvider
+from app.runtime import RuntimeProvider
+from app.runtime.config import runtime_provider_from_environment
 from app.services.devicetree_state import DeviceTreeState
 
 
@@ -22,7 +23,11 @@ def create_app(
         else DeviceTreeState.from_environment()
     )
     app.state.addressing_analyzer = addressing_analyzer or AddressingAnalyzer()
-    app.state.runtime_provider = runtime_provider or LocalLinuxRuntimeProvider()
+    app.state.runtime_provider = (
+        runtime_provider
+        if runtime_provider is not None
+        else runtime_provider_from_environment()
+    )
     app.include_router(devicetree_router)
     app.include_router(addressing_router)
     app.include_router(runtime_router)

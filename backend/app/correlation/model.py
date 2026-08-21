@@ -10,6 +10,7 @@ from app.runtime.model import RuntimeDevice, RuntimeDriver
 class CorrelationMatchMethod(str, Enum):
     EXACT_OF_NODE = "exact_of_node"
     UNMATCHED = "unmatched"
+    UNAVAILABLE = "unavailable"
 
 
 class AddressMatchType(str, Enum):
@@ -19,6 +20,7 @@ class AddressMatchType(str, Enum):
     OVERLAP = "overlap"
     NONE = "none"
     AMBIGUOUS = "ambiguous"
+    UNAVAILABLE = "unavailable"
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,7 @@ class CorrelationWarning:
     message: str
     dt_node_path: str | None = None
     runtime_device_path: str | None = None
+    source_path: str | None = None
 
     def __post_init__(self) -> None:
         if not self.code:
@@ -40,6 +43,10 @@ class CorrelationWarning:
         _validate_optional_absolute_path(
             self.runtime_device_path,
             "CorrelationWarning.runtime_device_path",
+        )
+        _validate_optional_absolute_path(
+            self.source_path,
+            "CorrelationWarning.source_path",
         )
 
 

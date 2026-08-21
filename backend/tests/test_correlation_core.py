@@ -263,6 +263,158 @@ class CorrelationCoreTest(unittest.TestCase):
         )
         self.assertEqual(report.warnings[0].code, "ADDRESS_MATCH_AMBIGUOUS")
 
+    def test_iomem_incomplete_does_not_report_none_match(self) -> None:
+        translation = _translation(SERIAL_PATH, start=0xE6E6_0000, size=0x100)
+
+        report = CorrelationService().correlate(
+            tree=_tree(),
+            addressing=AddressingReport(translations=(translation,)),
+            devices=(),
+            drivers=(),
+            iomem=(),
+            iomem_complete=False,
+        )
+
+        self.assertEqual(
+            report.devices[0].address_matches[0].match_type,
+            AddressMatchType.UNAVAILABLE,
+        )
+        self.assertEqual(report.devices[0].address_matches[0].candidates, ())
+
+    def test_iomem_incomplete_still_uses_positive_matches(self) -> None:
+        translations = (
+            _translation(SERIAL_PATH, start=0xE6E6_0000, size=0x100),
+            _translation(I2C_PATH, start=0xE650_0000, size=0x100),
+        )
+
+        report = CorrelationService().correlate(
+            tree=_tree(),
+            addressing=AddressingReport(translations=translations),
+            devices=(),
+            drivers=(),
+            iomem=(
+                IomemRegion(
+                    start=0xE6E6_0000,
+                    end=0xE6E6_00FF,
+                    name="e6e60000.serial",
+                ),
+            ),
+            iomem_complete=False,
+        )
+        by_path = {device.dt_node_path: device for device in report.devices}
+
+        self.assertEqual(
+            by_path[SERIAL_PATH].address_matches[0].match_type,
+            AddressMatchType.EXACT,
+        )
+        self.assertEqual(
+            by_path[I2C_PATH].address_matches[0].match_type,
+            AddressMatchType.UNAVAILABLE,
+        )
+
+    def test_devices_incomplete_marks_dt_only_correlation_unavailable(self) -> None:
+        translation = _translation(SERIAL_PATH, start=0xE6E6_0000, size=0x100)
+
+        report = CorrelationService().correlate(
+            tree=_tree(),
+            addressing=AddressingReport(translations=(translation,)),
+            devices=(),
+            drivers=(),
+            iomem=(
+                IomemRegion(
+                    start=0xE6E6_0000,
+                    end=0xE6E6_00FF,
+                    name="e6e60000.serial",
+                ),
+            ),
+            devices_complete=False,
+        )
+
+        self.assertEqual(
+            report.devices[0].match_method,
+            CorrelationMatchMethod.UNAVAILABLE,
+        )
+        self.assertIsNone(report.devices[0].runtime_device)
+        self.assertEqual(
+            report.devices[0].address_matches[0].match_type,
+            AddressMatchType.EXACT,
+        )
+
+    def test_devices_incomplete_still_uses_positive_runtime_device_matches(self) -> None:
+        device = _runtime_device(
+            of_node_sysfs_path=(
+                "/sys/firmware/devicetree/base/soc/serial@e6e60000"
+            ),
+        )
+        translations = (
+            _translation(SERIAL_PATH, start=0xE6E6_0000, size=0x100),
+            _translation(GPIO_PATH, start=0xE605_0000, size=0x100),
+        )
+
+        report = CorrelationService().correlate(
+            tree=_tree(),
+            addressing=AddressingReport(translations=translations),
+            devices=(device,),
+            drivers=(),
+            iomem=(),
+            devices_complete=False,
+        )
+        by_path = {device.dt_node_path: device for device in report.devices}
+
+        self.assertEqual(
+            by_path[SERIAL_PATH].match_method,
+            CorrelationMatchMethod.EXACT_OF_NODE,
+        )
+        self.assertEqual(
+            by_path[GPIO_PATH].match_method,
+            CorrelationMatchMethod.UNAVAILABLE,
+        )
+
+    def test_drivers_incomplete_does_not_report_driver_not_found(self) -> None:
+        device = _runtime_device(
+            driver_name="sh-sci",
+            driver_path="/sys/bus/platform/drivers/sh-sci",
+            of_node_sysfs_path=(
+                "/sys/firmware/devicetree/base/soc/serial@e6e60000"
+            ),
+        )
+
+        report = CorrelationService().correlate(
+            tree=_tree(),
+            addressing=AddressingReport(),
+            devices=(device,),
+            drivers=(),
+            iomem=(),
+            drivers_complete=False,
+        )
+
+        self.assertIsNone(report.devices[0].runtime_driver)
+        self.assertEqual(report.devices[0].warnings, ())
+        self.assertEqual(report.warnings, ())
+
+    def test_drivers_incomplete_still_uses_positive_driver_matches(self) -> None:
+        device = _runtime_device(
+            driver_name="sh-sci",
+            driver_path="/sys/bus/platform/drivers/sh-sci",
+        )
+        driver = RuntimeDriver(
+            name="sh-sci",
+            sysfs_path="/sys/bus/platform/drivers/sh-sci",
+            bus="platform",
+        )
+
+        report = CorrelationService().correlate(
+            tree=_tree(),
+            addressing=AddressingReport(),
+            devices=(device,),
+            drivers=(driver,),
+            iomem=(),
+            drivers_complete=False,
+        )
+
+        self.assertIs(report.devices[0].runtime_driver, driver)
+        self.assertEqual(report.warnings, ())
+
     def test_unresolved_dt_translation_adds_warning_without_address_match(self) -> None:
         translation = TranslatedAddressRange(
             node_path=SERIAL_PATH,

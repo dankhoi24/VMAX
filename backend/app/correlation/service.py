@@ -47,6 +47,9 @@ class CorrelationService:
         devices: tuple[RuntimeDevice, ...],
         drivers: tuple[RuntimeDriver, ...],
         iomem: tuple[IomemRegion, ...],
+        devices_complete: bool = True,
+        drivers_complete: bool = True,
+        iomem_complete: bool = True,
     ) -> CorrelationReport:
         warnings: list[CorrelationWarning] = []
         drivers_by_path = {driver.sysfs_path: driver for driver in drivers}
@@ -63,8 +66,11 @@ class CorrelationService:
                 device=device,
                 drivers_by_path=drivers_by_path,
                 drivers_by_name=drivers_by_name,
+                devices_complete=devices_complete,
+                drivers_complete=drivers_complete,
                 translations_by_node=translations_by_node,
                 iomem_regions=iomem_regions,
+                iomem_complete=iomem_complete,
             )
             correlated_devices.append(correlated)
             warnings.extend(correlated.warnings)
@@ -87,9 +93,14 @@ class CorrelationService:
                 address_matches=self._correlate_addresses(
                     node_translations,
                     iomem_regions,
+                    iomem_complete=iomem_complete,
                     warnings=node_warnings,
                 ),
-                match_method=CorrelationMatchMethod.UNMATCHED,
+                match_method=(
+                    CorrelationMatchMethod.UNMATCHED
+                    if devices_complete
+                    else CorrelationMatchMethod.UNAVAILABLE
+                ),
                 warnings=tuple(node_warnings),
             )
             correlated_devices.append(correlated)
@@ -107,8 +118,11 @@ class CorrelationService:
         device: RuntimeDevice,
         drivers_by_path: dict[str, RuntimeDriver],
         drivers_by_name: dict[str, RuntimeDriver],
+        devices_complete: bool,
+        drivers_complete: bool,
         translations_by_node: dict[str, tuple[TranslatedAddressRange, ...]],
         iomem_regions: tuple[IomemRegion, ...],
+        iomem_complete: bool,
     ) -> CorrelatedDevice:
         warnings: list[CorrelationWarning] = []
         dt_node_path = self._normalize_device_of_node(device, warnings)
@@ -130,6 +144,7 @@ class CorrelationService:
             device,
             drivers_by_path=drivers_by_path,
             drivers_by_name=drivers_by_name,
+            drivers_complete=drivers_complete,
             warnings=warnings,
         )
         static_regions = (
@@ -140,6 +155,7 @@ class CorrelationService:
         address_matches = self._correlate_addresses(
             static_regions,
             iomem_regions,
+            iomem_complete=iomem_complete,
             warnings=warnings,
         )
 
@@ -152,7 +168,11 @@ class CorrelationService:
             match_method=(
                 CorrelationMatchMethod.EXACT_OF_NODE
                 if dt_node_path is not None
-                else CorrelationMatchMethod.UNMATCHED
+                else (
+                    CorrelationMatchMethod.UNMATCHED
+                    if devices_complete
+                    else CorrelationMatchMethod.UNAVAILABLE
+                )
             ),
             warnings=tuple(warnings),
         )
@@ -185,6 +205,7 @@ class CorrelationService:
         self,
         static_regions: tuple[TranslatedAddressRange, ...],
         iomem_regions: tuple[IomemRegion, ...],
+        iomem_complete: bool,
         warnings: list[CorrelationWarning],
     ) -> tuple[AddressCorrelation, ...]:
         matches: list[AddressCorrelation] = []
@@ -209,6 +230,7 @@ class CorrelationService:
                     dt_start=region.cpu_address,
                     dt_end=region.end,
                     iomem_regions=iomem_regions,
+                    iomem_complete=iomem_complete,
                     warnings=warnings,
                 )
             )
@@ -221,6 +243,7 @@ def _find_runtime_driver(
     *,
     drivers_by_path: dict[str, RuntimeDriver],
     drivers_by_name: dict[str, RuntimeDriver],
+    drivers_complete: bool,
     warnings: list[CorrelationWarning],
 ) -> RuntimeDriver | None:
     if device.driver_path is not None:
@@ -232,6 +255,9 @@ def _find_runtime_driver(
         driver = drivers_by_name.get(device.driver_name)
         if driver is not None:
             return driver
+
+    if not drivers_complete:
+        return None
 
     if device.driver_name is not None or device.driver_path is not None:
         warnings.append(
@@ -270,6 +296,7 @@ def _match_region_to_iomem(
     dt_start: int,
     dt_end: int,
     iomem_regions: tuple[IomemRegion, ...],
+    iomem_complete: bool,
     warnings: list[CorrelationWarning],
 ) -> AddressCorrelation:
     exact = [
@@ -330,6 +357,16 @@ def _match_region_to_iomem(
             candidates=tuple(overlaps),
             match_type=AddressMatchType.OVERLAP,
             warnings=warnings,
+        )
+
+    if not iomem_complete:
+        return AddressCorrelation(
+            dt_start=dt_start,
+            dt_end=dt_end,
+            iomem_start=None,
+            iomem_end=None,
+            iomem_name=None,
+            match_type=AddressMatchType.UNAVAILABLE,
         )
 
     return AddressCorrelation(

@@ -16,7 +16,7 @@ def create_app(
     addressing_analyzer: AddressingAnalyzer | None = None,
     runtime_provider: RuntimeProvider | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="VMAX Hardware Explorer", version="0.1.0")
+    app = FastAPI(title="VMAX Hardware Explorer", version="0.3.0")
     app.state.devicetree_state = (
         devicetree_state
         if devicetree_state is not None

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getAddressingReport } from "./api/addressing";
 import { ApiError, getDeviceTree } from "./api/devicetree";
+import { CorrelationView } from "./components/CorrelationView";
 import { DeviceTreeView } from "./components/DeviceTreeView";
 import { RefreshIcon } from "./components/icons";
 import { PropertyPanel, type InspectorTab } from "./components/PropertyPanel";
@@ -179,6 +180,7 @@ export function App() {
 
       <RuntimeDeviceBrowser />
       <RuntimeAddressMap />
+      <CorrelationView />
     </main>
   );
 }

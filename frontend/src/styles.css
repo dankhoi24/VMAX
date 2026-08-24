@@ -46,6 +46,7 @@ button {
 }
 
 .app-header,
+.correlation-view,
 .search-panel,
 .runtime-address-map,
 .runtime-browser,
@@ -135,6 +136,7 @@ button {
 }
 
 .status-panel,
+.correlation-view,
 .tree-surface,
 .property-panel,
 .runtime-address-map,
@@ -289,6 +291,8 @@ button {
 
 .search-result-button:focus-visible,
 .search-clear-button:focus-visible,
+.correlation-button:focus-visible,
+.correlation-filter:focus-visible,
 .inspector-tab:focus-visible,
 .runtime-device-button:focus-visible,
 .runtime-search-clear-button:focus-visible,
@@ -355,6 +359,7 @@ button {
 }
 
 .tree-toolbar,
+.correlation-header,
 .property-panel-header,
 .runtime-address-map-header,
 .runtime-browser-header {
@@ -382,6 +387,7 @@ button {
 }
 
 .tree-toolbar h2,
+.correlation-header h2,
 .property-panel-header h2,
 .runtime-address-map-header h2,
 .runtime-browser-header h2,
@@ -406,6 +412,12 @@ button {
   overflow: hidden;
 }
 
+.correlation-view {
+  margin-top: 16px;
+  overflow: hidden;
+}
+
+.correlation-header > span,
 .runtime-address-map-header > span,
 .runtime-browser-header > span {
   color: var(--muted);
@@ -930,6 +942,350 @@ button {
 .runtime-iomem-range code {
   color: var(--text);
   font-size: 12px;
+}
+
+.correlation-summary {
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.correlation-summary div {
+  border-right: 1px solid var(--border);
+  padding: 10px 14px;
+}
+
+.correlation-summary div:last-child {
+  border-right: 0;
+}
+
+.correlation-summary dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.correlation-summary dd {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 800;
+  margin: 1px 0 0;
+}
+
+.correlation-body {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr);
+  min-height: 380px;
+}
+
+.correlation-list-panel {
+  border-right: 1px solid var(--border);
+  min-width: 0;
+  padding: 12px;
+}
+
+.correlation-filter-row {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 10px;
+}
+
+.correlation-filter {
+  align-items: center;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 5px;
+  justify-content: center;
+  min-height: 32px;
+  padding: 5px 7px;
+  text-transform: uppercase;
+}
+
+.correlation-filter:hover {
+  background: var(--accent-wash);
+  color: var(--accent-strong);
+}
+
+.correlation-filter-active,
+.correlation-filter-active:hover {
+  background: var(--accent-soft);
+  border-color: var(--border-strong);
+  color: var(--accent-strong);
+}
+
+.correlation-filter span {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  min-width: 22px;
+  padding: 0 6px;
+}
+
+.correlation-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 12px 0 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 0;
+}
+
+.correlation-button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  gap: 5px;
+  padding: 8px 9px;
+  text-align: left;
+  width: 100%;
+}
+
+.correlation-button:hover {
+  background: var(--accent-wash);
+}
+
+.correlation-button-selected,
+.correlation-button-selected:hover {
+  background: var(--accent-soft);
+  border-color: var(--border-strong);
+  box-shadow: inset 3px 0 var(--accent);
+}
+
+.correlation-row-main {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.correlation-row-title,
+.correlation-row-meta,
+.correlation-detail-heading code,
+.correlation-field-grid code,
+.correlation-card-heading code,
+.correlation-candidates code {
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.correlation-row-title {
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 0;
+}
+
+.correlation-row-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.correlation-badge {
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 1px 7px;
+  text-transform: uppercase;
+}
+
+.correlation-badge-exact_of_node,
+.correlation-address-exact {
+  background: #e7f7ec;
+  border-color: #bfe6cb;
+  color: #217447;
+}
+
+.correlation-badge-unmatched,
+.correlation-address-none {
+  background: #f2f4f7;
+  border-color: #d0d5dd;
+  color: #667085;
+}
+
+.correlation-badge-unavailable,
+.correlation-address-unavailable {
+  background: #fff4da;
+  border-color: #f3d99a;
+  color: #8a5a00;
+}
+
+.correlation-address-iomem_contains_dt,
+.correlation-address-dt_contains_iomem {
+  background: #eaf2ff;
+  border-color: #bfd7f5;
+  color: #245b95;
+}
+
+.correlation-address-overlap {
+  background: #fff0e5;
+  border-color: #f5c49f;
+  color: #9a4b13;
+}
+
+.correlation-address-ambiguous {
+  background: #f2eafa;
+  border-color: #d6c1ee;
+  color: #67428c;
+}
+
+.correlation-detail {
+  min-width: 0;
+}
+
+.correlation-detail-heading {
+  align-items: center;
+  background: var(--surface-tint);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 10px 14px;
+}
+
+.correlation-detail-heading code {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 0;
+}
+
+.correlation-detail-section {
+  border-bottom: 1px solid var(--border);
+}
+
+.correlation-detail-section h3 {
+  background: var(--surface-tint);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 14px;
+  margin: 0;
+  padding: 10px 14px;
+}
+
+.correlation-field-grid {
+  margin: 0;
+}
+
+.correlation-field-grid div {
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 132px minmax(0, 1fr);
+  min-height: 36px;
+  padding: 7px 14px;
+}
+
+.correlation-field-grid div:last-child {
+  border-bottom: 0;
+}
+
+.correlation-field-grid dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.correlation-field-grid dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.correlation-field-grid code {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.correlation-card-list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 12px 14px;
+}
+
+.correlation-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.correlation-card-heading {
+  align-items: center;
+  background: var(--surface-tint);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 9px 10px;
+}
+
+.correlation-card-heading strong,
+.correlation-card-heading span {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.correlation-field-grid-compact div {
+  grid-template-columns: 88px minmax(0, 1fr);
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.correlation-empty {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+  padding: 14px;
+}
+
+.correlation-candidates {
+  border-top: 1px solid var(--border);
+  padding: 10px;
+}
+
+.correlation-candidates strong {
+  color: var(--text);
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.correlation-candidates ul {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.correlation-candidates li {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.correlation-candidates code,
+.correlation-candidates span {
+  color: var(--text);
+  font-size: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .tree-scroll {
@@ -2289,6 +2645,15 @@ button {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .correlation-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .correlation-list-panel {
+    border-bottom: 1px solid var(--border);
+    border-right: 0;
+  }
+
   .runtime-device-list-panel {
     border-bottom: 1px solid var(--border);
     border-right: 0;
@@ -2321,6 +2686,7 @@ button {
   }
 
   .metadata-row,
+  .correlation-field-grid div,
   .property-fields div,
   .addressing-fields div,
   .runtime-iomem-fields div,
@@ -2370,6 +2736,19 @@ button {
   }
 
   .runtime-iomem-range {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .correlation-summary,
+  .correlation-filter-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .correlation-summary div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .correlation-candidates li {
     grid-template-columns: minmax(0, 1fr);
   }
 

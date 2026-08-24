@@ -3,11 +3,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import type { AddressingReport } from "./models/addressing";
+import type { CorrelationDevicesResponse } from "./models/correlation";
 import type { DeviceTreeResponse } from "./models/devicetree";
 import type {
   RuntimeDevicesResponse,
   RuntimeIomemResponse,
 } from "./models/runtime";
+
+vi.mock("./components/CorrelationView", () => ({
+  CorrelationView: () => <section aria-label="Correlation devices" />,
+}));
 
 afterEach(() => {
   cleanup();
@@ -121,6 +126,11 @@ const runtimeIomem: RuntimeIomemResponse = {
   warnings: [],
 };
 
+const correlationDevices: CorrelationDevicesResponse = {
+  data: [],
+  warnings: [],
+};
+
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     headers: {
@@ -149,6 +159,9 @@ function stubApi(options: StubApiOptions = {}): void {
       }
       if (url.endsWith("/api/v1/runtime/iomem")) {
         return jsonResponse(runtimeIomem);
+      }
+      if (url.endsWith("/api/v1/correlation/devices")) {
+        return jsonResponse(correlationDevices);
       }
       return new Response("", { status: 404, statusText: "Not Found" });
     }),

@@ -5,6 +5,7 @@ from app.dependency.model import (
     DependencyReference,
     DependencyResolution,
 )
+from app.dependency.devicetree import DeviceTreeDependencyExtractor
 
 __all__ = [
     "DependencyEvidence",
@@ -12,4 +13,5 @@ __all__ = [
     "DependencyKind",
     "DependencyReference",
     "DependencyResolution",
+    "DeviceTreeDependencyExtractor",
 ]

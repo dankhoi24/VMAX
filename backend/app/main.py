@@ -19,7 +19,7 @@ def create_app(
     runtime_provider: RuntimeProvider | None = None,
     correlation_service: CorrelationService | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="VMAX Hardware Explorer", version="0.3.0")
+    app = FastAPI(title="VMAX Hardware Explorer", version="0.4.0")
     app.state.devicetree_state = (
         devicetree_state
         if devicetree_state is not None

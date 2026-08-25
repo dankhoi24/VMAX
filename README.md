@@ -4,7 +4,7 @@ VMAX is an **Embedded System Topology & Correlation Explorer** for understanding
 
 The project starts with Device Tree exploration and grows toward correlation across devices, drivers, MMIO, IRQs, DMA/IOMMU/IOVA, kernel symbols, snapshots, runtime events, and SoC-specific plugins.
 
-> **v0.3.0 — Linux Runtime Explorer:** adds live Linux runtime inspection from `/sys` and `/proc`, including devices, driver bindings, system metadata, `/proc/iomem`, local collection, and remote SSH collection for embedded targets.
+> **v0.4.0 — DT ↔ Linux Runtime Correlation:** connects static Device Tree descriptions with Linux runtime devices, bound drivers, and `/proc/iomem` physical-resource evidence using conservative, provenance-preserving correlation.
 
 ## Why VMAX
 
@@ -20,51 +20,55 @@ Low-level Linux and embedded debugging often requires jumping between multiple v
 
 VMAX aims to bring those views into one consistent model instead of treating them as separate tools and files.
 
-## v0.3.0 scope
+## v0.4.0 scope
 
-VMAX v0.3.0 builds on the static Device Tree and address-space analysis from v0.1/v0.2 with a Linux runtime view:
+VMAX v0.4.0 connects the static Device Tree/addressing pipeline from v0.1/v0.2 with the Linux runtime explorer introduced in v0.3:
 
 ```text
-                         VMAX
-                          |
-          +---------------+---------------+
-          |                               |
-   Static Device Tree                Linux Runtime
-          |                               |
-        DTB file                     /sys + /proc
-          |                               |
-   pylibfdt parser                RuntimeProvider
-          |                               |
-   DeviceTree model          +------------+------------+
-          |                  |                         |
-   AddressingReport      Local transport           SSH transport
-          |                  |                         |
-          +------------------+-------------------------+
-                             |
-                         FastAPI
-                             |
+               Static                     Runtime
+                 |                           |
+            DeviceTree                 RuntimeDevice
+                 |                           |
+         AddressingReport              RuntimeDriver
+                 |                           |
+                 |                       /proc/iomem
+                 |                           |
+                 +------------+--------------+
+                              |
+                     CorrelationService
+                              |
+                              v
+                     CorrelationReport
+                              |
+                         FastAPI API
+                              |
                          React UI
 ```
 
-Implemented in v0.3.0:
+Implemented in v0.4.0:
 
 - all v0.1.0 Device Tree parsing, browsing, property inspection, and search capabilities
 - all v0.2.0 Device Tree addressing, `reg` / `ranges` interpretation, translation tracing, and physical address-space visualization
-- Linux runtime domain models for system metadata, devices, drivers, resources, `/proc/iomem`, and structured warnings
-- Linux system metadata from runtime sources, including hostname, `uname`, architecture normalization, and `/proc/cmdline`
-- platform-device inventory from sysfs
-- current driver binding metadata when a runtime device exposes a driver symlink
-- runtime `of_node` sysfs metadata without claiming Device Tree correlation
-- platform-driver inventory and bound-device information
-- hierarchical `/proc/iomem` parsing and runtime physical address visualization
-- partial-data semantics: inaccessible or missing runtime data becomes structured warnings instead of collapsing the whole scan
-- local runtime transport for inspecting the machine running the backend
-- SSH runtime transport for inspecting a remote embedded Linux target without installing VMAX, Python, FastAPI, or Node.js on the target
-- secure SSH host-key verification by default, with an explicit opt-in for accepting unknown host keys in controlled lab environments
-- frontend Runtime Device Browser and Runtime Address Map
-- real-board validation using a Renesas R-Car Linux target over SSH
+- all v0.3.0 Linux runtime, local transport, and SSH runtime collection capabilities
+- exact Device Tree ↔ Linux runtime-device identity correlation through resolved runtime `of_node`
+- runtime-device ↔ bound-driver association using observed sysfs evidence
+- translated DT physical-range ↔ `/proc/iomem` correlation
+- explicit address relations: `exact`, `iomem_contains_dt`, `dt_contains_iomem`, `overlap`, `none`, `ambiguous`, and `unavailable`
+- preservation of all `/proc/iomem` candidates for ambiguous relations instead of guessing ownership
+- conservative semantics: physical address coincidence is supporting evidence, not proof that a device or driver owns a DT MMIO region
+- partial-source semantics where positive evidence remains usable while negative conclusions require complete source collection
+- explicit distinction between `unmatched` and `unavailable`
+- structured correlation warnings with source, DT-node, and runtime-device provenance
+- `GET /api/v1/correlation/devices`
+- frontend DT Runtime Correlation explorer with search, status filters, identity, driver, address-relation, warnings, and ambiguous-candidate views
 
-v0.3.0 intentionally does **not** yet claim Device Tree ↔ Linux runtime correlation. In particular, it does not infer that a Device Tree node owns a runtime device, that a static Device Tree region is owned by a particular runtime driver, or that a compatible string maps to a currently bound driver. Those correlations are the focus of v0.4.
+### Correlation semantics
+
+VMAX uses runtime `of_node` as the primary DT ↔ runtime-device identity evidence.
+
+VMAX deliberately does **not** infer device identity from compatible strings, device names, or physical-address coincidence.
+
+`/proc/iomem` correlation describes how translated DT physical ranges relate to Linux's physical resource tree. It does not by itself prove device or driver ownership of a region.
 
 Runtime resources are reported only when a real runtime source exposes them. VMAX does not fabricate generic platform-device resources from interfaces that Linux does not provide as a stable platform-bus ABI.
 
@@ -115,8 +119,8 @@ SoC plugins
 - **v0.1 — Device Tree Explorer**: DTB parsing, domain model, API, tree browser, property panel, search — **complete**
 - **v0.2 — Memory/MMIO Map**: `reg`, `ranges`, address cells, memory regions, translation trace, address-space map — **complete**
 - **v0.3 — Linux Runtime Explorer**: `/sys`, `/proc`, runtime devices/drivers, `/proc/iomem`, local/SSH transport — **complete**
-- **v0.4 — DT ↔ Device ↔ Driver correlation** — **next**
-- **v0.5 — IRQ and dependency graph**
+- **v0.4 — DT ↔ Device ↔ Driver correlation** — **complete**
+- **v0.5 — IRQ and dependency graph** — **next**
 - **v0.6 — PCIe topology and snapshots**
 - **v0.7 — IOMMU/DMA foundation**
 - **v0.8 — Live event engine**
@@ -133,6 +137,7 @@ backend/
 │   ├── addressing/
 │   ├── api/
 │   ├── collectors/
+│   ├── correlation/
 │   ├── model/
 │   ├── parsers/
 │   ├── runtime/
@@ -268,6 +273,7 @@ GET /api/v1/runtime/metadata
 GET /api/v1/runtime/devices
 GET /api/v1/runtime/drivers
 GET /api/v1/runtime/iomem
+GET /api/v1/correlation/devices
 ```
 
 ### 5. Start the frontend
@@ -296,7 +302,11 @@ With the static DTB and runtime backend configured, the browser provides:
 - runtime platform-device and driver browsing
 - bound-driver and runtime `of_node` metadata when exposed by sysfs
 - runtime `/proc/iomem` visualization
-- structured warnings for partial runtime data
+- DT ↔ runtime-device identity correlation
+- runtime-device ↔ driver correlation
+- DT physical-range ↔ `/proc/iomem` relation visualization
+- explicit `unmatched` vs `unavailable` semantics
+- ambiguous address candidates and structured warnings
 
 ## Tests
 
@@ -317,22 +327,21 @@ npm run build
 
 ## Validation
 
-v0.3.0 has been validated through backend regression testing, frontend test/typecheck/build validation, and manual runtime validation against a real Renesas R-Car Linux target over SSH.
+v0.4.0 has been validated through backend regression testing, frontend test/typecheck/build validation, and real-target correlation validation with the Linux runtime collection pipeline.
 
-The runtime validation covers:
+The v0.4 validation covers:
 
-- remote hostname and `uname` metadata
-- architecture normalization
-- `/proc/cmdline`
-- platform-device inventory
-- current driver bindings
-- runtime `of_node` metadata
-- platform-driver inventory
-- `/proc/iomem`
-- browser rendering of the runtime views
-- remote collection through the SSH transport while the VMAX backend/frontend remain on the host
+- DT ↔ runtime-device matching through resolved `of_node`
+- runtime-device ↔ driver association
+- translated DT physical ranges against `/proc/iomem`
+- exact, containment, overlap, none, ambiguous, and unavailable address semantics
+- partial-source behavior where positive evidence is retained while negative conclusions require complete scans
+- `unmatched` vs `unavailable`
+- frontend rendering of correlation state, address evidence, driver state, warnings, and ambiguous candidates
 
-The v0.2.0 addressing semantics were also validated with a real Raspberry Pi 5 DTB through the production parser and addressing pipeline, including exact RAM/reserved-memory regions, simple-bus translation, translation provenance, multiple `reg` resources, addresses above 4 GiB, and conservative handling of unsupported PCI 3-cell address formats.
+The v0.3 runtime foundation was validated against a real Renesas R-Car Linux target over SSH, including runtime metadata, platform devices, current driver bindings, runtime `of_node`, platform drivers, `/proc/iomem`, and browser rendering while the backend/frontend remained on the host.
+
+The v0.2 addressing semantics were also validated with a real Raspberry Pi 5 DTB through the production parser and addressing pipeline, including exact RAM/reserved-memory regions, simple-bus translation, translation provenance, multiple `reg` resources, addresses above 4 GiB, and conservative handling of unsupported PCI 3-cell address formats.
 
 ## Design principles
 
@@ -341,13 +350,15 @@ The v0.2.0 addressing semantics were also validated with a real Raspberry Pi 5 D
 - **Be conservative when uncertain**: unsupported or ambiguous semantics produce structured warnings rather than fabricated mappings.
 - **Keep libfdt behind an adapter boundary**: pylibfdt objects do not leak into the domain model.
 - **Separate syntax from semantics**: parsing/decoding stays separate from addressing interpretation and runtime correlation.
-- **Separate static and runtime truth**: Device Tree and Linux runtime views remain distinct until an explicit correlation layer connects them.
+- **Keep static and runtime evidence explicit**: Device Tree and Linux runtime remain separate sources connected only through an explicit correlation layer.
+- **Use `of_node` as primary identity evidence**: do not infer identity from names, compatible strings, or address coincidence.
+- **Treat `/proc/iomem` as supporting address evidence**: range relationships do not prove ownership.
 - **Keep the core generic**: platform-specific support should build on common parser, model, provider, and transport contracts.
-- **Preserve provenance**: translated addresses retain the bus/range steps that produced them.
-- **Prefer partial observability over fabricated certainty**: unavailable runtime information becomes a warning, not an invented value.
+- **Preserve provenance**: translated addresses and warnings retain the evidence that produced them.
+- **Prefer partial observability over fabricated certainty**: positive evidence remains usable, while unavailable or incomplete information never becomes a false negative conclusion.
 
 ## Project status
 
-VMAX v0.3.0 is the third public development release. It adds live Linux runtime visibility and remote SSH collection on top of the existing Device Tree and static address-space explorers.
+VMAX v0.4.0 is the fourth public development release. It connects the static Device Tree/address-space explorers with Linux runtime devices, drivers, and `/proc/iomem` evidence through an explicit correlation layer.
 
-The next milestone is **v0.4 — DT ↔ Device ↔ Driver correlation**, where the currently separate static and runtime models will begin to be connected explicitly.
+The next milestone is **v0.5 — IRQ and dependency graph**.

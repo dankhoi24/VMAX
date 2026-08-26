@@ -5,12 +5,14 @@ import {
   getRuntimeDevices,
   getRuntimeDrivers,
   getRuntimeIomem,
+  getRuntimeInterrupts,
   getRuntimeMetadata,
 } from "./runtime";
 import type {
   RuntimeDevicesResponse,
   RuntimeDriversResponse,
   RuntimeIomemResponse,
+  RuntimeInterruptsResponse,
   RuntimeMetadataResponse,
 } from "../models/runtime";
 import { formatHex } from "../models/runtime";
@@ -150,6 +152,32 @@ describe("runtime API client", () => {
 
     await expect(getRuntimeIomem({ fetchImpl })).resolves.toEqual(iomem);
     expect(requests).toEqual(["/api/v1/runtime/iomem"]);
+  });
+
+  it("gets runtime interrupts from the interrupts endpoint", async () => {
+    const interrupts: RuntimeInterruptsResponse = {
+      data: [
+        {
+          irq: 214,
+          counts: [0, 4291, 0, 0],
+          controller: "GICv3",
+          hardware_irq: 182,
+          trigger: "Level",
+          actions: ["imr"],
+          raw_line: "214: 0 4291 0 0 GICv3 182 Level imr",
+          source_path: "/proc/interrupts",
+          metadata: [["affinity", "0-3"]],
+          total_count: 4291,
+        },
+      ],
+      warnings: [],
+    };
+    const { fetchImpl, requests } = createFetch(jsonResponse(interrupts));
+
+    await expect(getRuntimeInterrupts({ fetchImpl })).resolves.toEqual(
+      interrupts,
+    );
+    expect(requests).toEqual(["/api/v1/runtime/interrupts"]);
   });
 
   it("preserves runtime warnings", async () => {

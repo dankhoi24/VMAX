@@ -32,6 +32,19 @@ export interface RuntimeResource {
   size: number;
 }
 
+export interface RuntimeInterrupt {
+  irq: number;
+  counts: number[];
+  controller: string | null;
+  hardware_irq: number | null;
+  trigger: string | null;
+  actions: string[];
+  raw_line: string | null;
+  source_path: string;
+  metadata: RuntimeMetadataItem[];
+  total_count: number;
+}
+
 export interface RuntimeDevice {
   name: string;
   sysfs_path: string;
@@ -66,6 +79,7 @@ export type RuntimeMetadataResponse = RuntimeCollection<RuntimeSystemInfo>;
 export type RuntimeDevicesResponse = RuntimeCollection<RuntimeDevice[]>;
 export type RuntimeDriversResponse = RuntimeCollection<RuntimeDriver[]>;
 export type RuntimeIomemResponse = RuntimeCollection<IomemRegion[]>;
+export type RuntimeInterruptsResponse = RuntimeCollection<RuntimeInterrupt[]>;
 
 export function formatHex(value: number): string {
   return `0x${value.toString(16).toUpperCase()}`;

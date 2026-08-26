@@ -2,6 +2,7 @@ import type {
   RuntimeDevicesResponse,
   RuntimeDriversResponse,
   RuntimeIomemResponse,
+  RuntimeInterruptsResponse,
   RuntimeMetadataResponse,
 } from "../models/runtime";
 import { requestJson } from "./http";
@@ -42,4 +43,13 @@ export async function getRuntimeIomem(
   options: RuntimeApiOptions = {},
 ): Promise<RuntimeIomemResponse> {
   return requestJson<RuntimeIomemResponse>("/api/v1/runtime/iomem", options);
+}
+
+export async function getRuntimeInterrupts(
+  options: RuntimeApiOptions = {},
+): Promise<RuntimeInterruptsResponse> {
+  return requestJson<RuntimeInterruptsResponse>(
+    "/api/v1/runtime/interrupts",
+    options,
+  );
 }

@@ -3,11 +3,13 @@ import { useCallback, useEffect, useState } from "react";
 import { getAddressingReport } from "./api/addressing";
 import { ApiError, getDeviceTree } from "./api/devicetree";
 import { CorrelationView } from "./components/CorrelationView";
+import { DependencyPanel } from "./components/DependencyPanel";
 import { DeviceTreeView } from "./components/DeviceTreeView";
 import { RefreshIcon } from "./components/icons";
 import { PropertyPanel, type InspectorTab } from "./components/PropertyPanel";
 import { RuntimeAddressMap } from "./components/RuntimeAddressMap";
 import { RuntimeDeviceBrowser } from "./components/RuntimeDeviceBrowser";
+import { RuntimeInterruptList } from "./components/RuntimeInterruptList";
 import { SearchBox } from "./components/SearchBox";
 import type { AddressingReport } from "./models/addressing";
 import type { DeviceTreeNode, DeviceTreeResponse } from "./models/devicetree";
@@ -33,6 +35,7 @@ export function App() {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties");
   const [selectionRequest, setSelectionRequest] = useState(0);
+  const [refreshGeneration, setRefreshGeneration] = useState(0);
 
   const selectNode = useCallback((node: DeviceTreeNode) => {
     setSelectedNode(node);
@@ -114,6 +117,11 @@ export function App() {
     void loadTree();
   }, [loadTree]);
 
+  const handleReload = useCallback(() => {
+    setRefreshGeneration((value) => value + 1);
+    void loadTree();
+  }, [loadTree]);
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -121,7 +129,7 @@ export function App() {
           <h1>VMAX</h1>
           <span>Device Tree Explorer</span>
         </div>
-        <button className="reload-button" type="button" onClick={loadTree}>
+        <button className="reload-button" type="button" onClick={handleReload}>
           <RefreshIcon className="button-icon" />
           Reload
         </button>
@@ -179,8 +187,10 @@ export function App() {
       )}
 
       <RuntimeDeviceBrowser />
+      <RuntimeInterruptList refreshToken={refreshGeneration} />
       <RuntimeAddressMap />
       <CorrelationView />
+      <DependencyPanel refreshToken={refreshGeneration} />
     </main>
   );
 }

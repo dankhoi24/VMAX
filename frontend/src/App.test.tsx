@@ -1,13 +1,22 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import type { AddressingReport } from "./models/addressing";
 import type { CorrelationDevicesResponse } from "./models/correlation";
+import type { DependencyDevicesResponse } from "./models/dependency";
 import type { DeviceTreeResponse } from "./models/devicetree";
 import type {
   RuntimeDevicesResponse,
   RuntimeIomemResponse,
+  RuntimeInterruptsResponse,
 } from "./models/runtime";
 
 vi.mock("./components/CorrelationView", () => ({
@@ -126,7 +135,17 @@ const runtimeIomem: RuntimeIomemResponse = {
   warnings: [],
 };
 
+const runtimeInterrupts: RuntimeInterruptsResponse = {
+  data: [],
+  warnings: [],
+};
+
 const correlationDevices: CorrelationDevicesResponse = {
+  data: [],
+  warnings: [],
+};
+
+const dependencyDevices: DependencyDevicesResponse = {
   data: [],
   warnings: [],
 };
@@ -160,8 +179,14 @@ function stubApi(options: StubApiOptions = {}): void {
       if (url.endsWith("/api/v1/runtime/iomem")) {
         return jsonResponse(runtimeIomem);
       }
+      if (url.endsWith("/api/v1/runtime/interrupts")) {
+        return jsonResponse(runtimeInterrupts);
+      }
       if (url.endsWith("/api/v1/correlation/devices")) {
         return jsonResponse(correlationDevices);
+      }
+      if (url.endsWith("/api/v1/dependencies/devices")) {
+        return jsonResponse(dependencyDevices);
       }
       return new Response("", { status: 404, statusText: "Not Found" });
     }),
@@ -288,4 +313,33 @@ describe("App", () => {
     expect(await screen.findByText("Mapping")).toBeTruthy();
     expect(screen.getByText("0x107d000000")).toBeTruthy();
   });
+
+  it("refreshes dependency and runtime interrupt panels from global reload", async () => {
+    stubApi();
+
+    render(<App />);
+
+    expect(
+      await screen.findByText("No runtime interrupts reported by the current source."),
+    ).toBeTruthy();
+    expect(
+      await screen.findByText("No dependency views reported by the current source."),
+    ).toBeTruthy();
+    expect(countFetchCalls("/api/v1/runtime/interrupts")).toBe(1);
+    expect(countFetchCalls("/api/v1/dependencies/devices")).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /Reload/ }));
+
+    await waitFor(() => {
+      expect(countFetchCalls("/api/v1/devicetree")).toBe(2);
+      expect(countFetchCalls("/api/v1/runtime/interrupts")).toBe(2);
+      expect(countFetchCalls("/api/v1/dependencies/devices")).toBe(2);
+    });
+  });
 });
+
+function countFetchCalls(path: string): number {
+  return vi
+    .mocked(fetch)
+    .mock.calls.filter(([input]) => String(input).endsWith(path)).length;
+}

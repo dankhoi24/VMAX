@@ -38,7 +38,7 @@ export function DependencyGraph({
         <span>{graph.edges.length.toLocaleString()} relations</span>
       </div>
       <p className="dependency-graph-caption">
-        Dependency direction: consumer -&gt; provider -&gt; runtime
+        Static dependency: consumer -&gt; provider · Runtime mapping: provider -&gt; IRQ
       </p>
       <div className="dependency-graph-scroll">
         <div

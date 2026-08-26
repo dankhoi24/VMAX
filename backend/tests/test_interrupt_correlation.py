@@ -30,13 +30,36 @@ from app.runtime import RuntimeInterrupt
 
 
 GIC_PATH = "/soc/interrupt-controller@f1000000"
+SECOND_GIC_PATH = "/soc/interrupt-controller@f2000000"
 GPIO_PATH = "/soc/gpio@e6050000"
 IMR_PATH = "/soc/imr@e6260000"
 
 
 class InterruptCorrelationTest(unittest.TestCase):
-    def test_gic_interrupt_specifier_yields_hwirq_identity_candidates(self) -> None:
+    def test_gic_interrupt_specifier_yields_canonical_hwirq_identity(self) -> None:
         dependency = _interrupt_dependency(specifier_cells=(0, 150, 4))
+
+        identities, warnings = InterruptIdentityExtractor().dt_identities(
+            dependency,
+            _tree(gic_interrupt_cells=4),
+        )
+
+        self.assertEqual(warnings, ())
+        self.assertEqual(len(identities), 1)
+        self.assertEqual(identities[0].controller_key, "gic")
+        self.assertEqual(identities[0].hardware_irq, 182)
+        self.assertEqual(identities[0].trigger, "level")
+        self.assertEqual(
+            _metadata(identities[0], "gic_hwirq_rule"),
+            "gic_intid",
+        )
+        self.assertEqual(
+            _metadata(identities[0], "specifier_cell_count"),
+            3,
+        )
+
+    def test_gic_four_cell_interrupt_specifier_is_supported(self) -> None:
+        dependency = _interrupt_dependency(specifier_cells=(0, 150, 4, 0))
 
         identities, warnings = InterruptIdentityExtractor().dt_identities(
             dependency,
@@ -44,12 +67,15 @@ class InterruptCorrelationTest(unittest.TestCase):
         )
 
         self.assertEqual(warnings, ())
-        self.assertEqual(tuple(identity.controller_key for identity in identities), ("gic", "gic"))
-        self.assertEqual(tuple(identity.hardware_irq for identity in identities), (150, 182))
-        self.assertEqual(tuple(identity.trigger for identity in identities), ("level_high", "level_high"))
+        self.assertEqual(len(identities), 1)
+        self.assertEqual(identities[0].hardware_irq, 182)
         self.assertEqual(
-            tuple(_metadata(identity, "gic_hwirq_rule") for identity in identities),
-            ("specifier_number", "gic_intid"),
+            _metadata(identities[0], "specifier_cell_count"),
+            4,
+        )
+        self.assertEqual(
+            _metadata(identities[0], "ppi_partition_phandle"),
+            0,
         )
 
     def test_correlates_gic_dependency_to_runtime_interrupt(self) -> None:
@@ -58,7 +84,7 @@ class InterruptCorrelationTest(unittest.TestCase):
             irq=182,
             counts=(0, 4291, 0, 0),
             controller="GICv3",
-            hardware_irq=150,
+            hardware_irq=182,
             trigger="Level",
             actions=("imr",),
         )
@@ -84,13 +110,13 @@ class InterruptCorrelationTest(unittest.TestCase):
             InterruptMatchMethod.CONTROLLER_HARDWARE_IRQ,
         )
 
-    def test_gic_spi_intid_candidate_can_match_runtime_hwirq(self) -> None:
+    def test_raw_gic_spi_number_does_not_match_runtime_hwirq(self) -> None:
         dependency = _interrupt_dependency(specifier_cells=(0, 150, 4))
         runtime = RuntimeInterrupt(
             irq=214,
             counts=(1, 0, 0, 0),
             controller="GICv3",
-            hardware_irq=182,
+            hardware_irq=150,
         )
 
         report = InterruptCorrelationService().correlate(
@@ -99,8 +125,11 @@ class InterruptCorrelationTest(unittest.TestCase):
             interrupts=(runtime,),
         )
 
-        self.assertEqual(report.correlations[0].resolution, InterruptCorrelationResolution.RESOLVED)
-        self.assertIs(report.correlations[0].runtime_interrupt, runtime)
+        self.assertEqual(
+            report.correlations[0].resolution,
+            InterruptCorrelationResolution.UNRESOLVED,
+        )
+        self.assertIsNone(report.correlations[0].runtime_interrupt)
 
     def test_hwirq_without_supported_controller_does_not_match(self) -> None:
         dependency = _interrupt_dependency(specifier_cells=(0, 7, 4))
@@ -152,13 +181,13 @@ class InterruptCorrelationTest(unittest.TestCase):
             irq=182,
             counts=(1,),
             controller="GICv3",
-            hardware_irq=150,
+            hardware_irq=182,
         )
         irq_b = RuntimeInterrupt(
             irq=300,
             counts=(2,),
             controller="GICv3",
-            hardware_irq=150,
+            hardware_irq=182,
         )
 
         report = InterruptCorrelationService().correlate(
@@ -172,6 +201,33 @@ class InterruptCorrelationTest(unittest.TestCase):
         self.assertEqual(correlation.runtime_candidates, (irq_a, irq_b))
         self.assertEqual(correlation.warnings[0].code, "RUNTIME_INTERRUPT_MATCH_AMBIGUOUS")
         self.assertEqual(report.warnings[0].code, "RUNTIME_INTERRUPT_MATCH_AMBIGUOUS")
+
+    def test_multiple_gic_domains_do_not_auto_resolve_family_hwirq_match(self) -> None:
+        dependency = _interrupt_dependency(specifier_cells=(0, 150, 4))
+        runtime = RuntimeInterrupt(
+            irq=182,
+            counts=(1,),
+            controller="GICv3",
+            hardware_irq=182,
+        )
+
+        report = InterruptCorrelationService().correlate(
+            tree=_tree(with_second_gic=True),
+            dependencies=(dependency,),
+            interrupts=(runtime,),
+        )
+
+        correlation = report.correlations[0]
+        self.assertEqual(
+            correlation.resolution,
+            InterruptCorrelationResolution.AMBIGUOUS,
+        )
+        self.assertIsNone(correlation.runtime_interrupt)
+        self.assertEqual(correlation.runtime_candidates, (runtime,))
+        self.assertEqual(
+            correlation.warnings[0].code,
+            "DT_INTERRUPT_CONTROLLER_DOMAIN_AMBIGUOUS",
+        )
 
     def test_runtime_interrupt_source_unavailable_is_not_unresolved(self) -> None:
         dependency = _interrupt_dependency(specifier_cells=(0, 150, 4))
@@ -292,7 +348,11 @@ class InterruptCorrelationTest(unittest.TestCase):
             )
 
 
-def _tree() -> DeviceTree:
+def _tree(
+    *,
+    gic_interrupt_cells: int = 3,
+    with_second_gic: bool = False,
+) -> DeviceTree:
     gic = DeviceTreeNode(
         name="interrupt-controller",
         path=GIC_PATH,
@@ -301,8 +361,20 @@ def _tree() -> DeviceTree:
         properties=(
             DeviceTreeProperty(name="interrupt-controller", raw_bytes=b""),
             strings("compatible", "arm,gic-v3"),
-            cells("#interrupt-cells", 3),
+            cells("#interrupt-cells", gic_interrupt_cells),
             cells("phandle", 1),
+        ),
+    )
+    second_gic = DeviceTreeNode(
+        name="interrupt-controller",
+        path=SECOND_GIC_PATH,
+        unit_address="f2000000",
+        parent_path="/soc",
+        properties=(
+            DeviceTreeProperty(name="interrupt-controller", raw_bytes=b""),
+            strings("compatible", "arm,gic-v3"),
+            cells("#interrupt-cells", 3),
+            cells("phandle", 2),
         ),
     )
     gpio = DeviceTreeNode(
@@ -322,11 +394,16 @@ def _tree() -> DeviceTree:
         unit_address="e6260000",
         parent_path="/soc",
     )
+    soc_children = (
+        (gic, second_gic, gpio, imr)
+        if with_second_gic
+        else (gic, gpio, imr)
+    )
     soc = DeviceTreeNode(
         name="soc",
         path="/soc",
         parent_path="/",
-        children=(gic, gpio, imr),
+        children=soc_children,
     )
     root = DeviceTreeNode(name="/", path="/", children=(soc,))
     return DeviceTree(root=root)

@@ -116,6 +116,37 @@ class InterruptCorrelationService:
             dt_identities,
             runtime_by_identity,
         )
+
+        controller_domain_ambiguous = (
+            self._identity_extractor.dt_controller_domain_is_ambiguous(
+                dependency,
+                tree,
+            )
+        )
+
+        if runtime_candidates and controller_domain_ambiguous:
+            warnings.append(
+                InterruptCorrelationWarning(
+                    code="DT_INTERRUPT_CONTROLLER_DOMAIN_AMBIGUOUS",
+                    consumer_dt_path=dependency.consumer_dt_path,
+                    provider_dt_path=dependency.provider_dt_path,
+                    source_path=_reference_source_path(dependency),
+                    message=(
+                        "DT has multiple supported interrupt controller domains "
+                        "but runtime IRQ evidence only identifies controller "
+                        "family and hardware IRQ"
+                    ),
+                )
+            )
+            return InterruptCorrelation(
+                dependency=dependency,
+                dt_identities=dt_identities,
+                runtime_candidates=runtime_candidates,
+                resolution=InterruptCorrelationResolution.AMBIGUOUS,
+                match_method=InterruptMatchMethod.CONTROLLER_HARDWARE_IRQ,
+                warnings=tuple(warnings),
+            )
+
         if len(runtime_candidates) == 1:
             return InterruptCorrelation(
                 dependency=dependency,

@@ -120,48 +120,52 @@ class InterruptIdentityExtractor:
             ),
         )
 
+    def dt_controller_domain_is_ambiguous(
+        self,
+        reference: DependencyReference,
+        tree: DeviceTree,
+    ) -> bool:
+        if reference.provider_dt_path is None:
+            return False
+
+        provider = tree.get_node(reference.provider_dt_path)
+        if provider is None:
+            return False
+
+        controller_key = _dt_provider_controller_key(provider)
+        if controller_key is None:
+            return False
+
+        return len(_dt_interrupt_controller_paths(tree, controller_key)) > 1
+
 
 def _gic_identities(
     reference: DependencyReference,
 ) -> tuple[InterruptIdentity, ...]:
     cells = reference.specifier_cells
     source_path = _reference_source_path(reference)
-    if len(cells) != 3:
+    if len(cells) < 3:
         return ()
 
-    interrupt_type, interrupt_number, flags = cells
+    interrupt_type, interrupt_number, flags = cells[:3]
     type_name = _gic_interrupt_type_name(interrupt_type)
     if type_name is None:
         return ()
 
     trigger = _gic_trigger(flags)
-    candidates: list[InterruptIdentity] = [
+    return (
         _gic_identity(
-            hardware_irq=interrupt_number,
+            hardware_irq=_gic_intid(interrupt_type, interrupt_number),
             trigger=trigger,
             source_path=source_path,
             interrupt_type=type_name,
             interrupt_number=interrupt_number,
             flags=flags,
-            rule="specifier_number",
-        )
-    ]
-
-    translated = _gic_intid(interrupt_type, interrupt_number)
-    if translated != interrupt_number:
-        candidates.append(
-            _gic_identity(
-                hardware_irq=translated,
-                trigger=trigger,
-                source_path=source_path,
-                interrupt_type=type_name,
-                interrupt_number=interrupt_number,
-                flags=flags,
-                rule="gic_intid",
-            )
-        )
-
-    return tuple(candidates)
+            rule="gic_intid",
+            specifier_cell_count=len(cells),
+            ppi_partition_phandle=cells[3] if len(cells) >= 4 else None,
+        ),
+    )
 
 
 def _gic_identity(
@@ -173,20 +177,27 @@ def _gic_identity(
     interrupt_number: int,
     flags: int,
     rule: str,
+    specifier_cell_count: int,
+    ppi_partition_phandle: int | None,
 ) -> InterruptIdentity:
+    metadata: list[tuple[str, str | int]] = [
+        ("specifier_format", "arm,gic"),
+        ("specifier_cell_count", specifier_cell_count),
+        ("gic_interrupt_type", interrupt_type),
+        ("gic_interrupt_number", interrupt_number),
+        ("gic_flags", flags),
+        ("gic_hwirq_rule", rule),
+    ]
+    if ppi_partition_phandle is not None:
+        metadata.append(("ppi_partition_phandle", ppi_partition_phandle))
+
     return InterruptIdentity(
         controller_key=GIC_CONTROLLER_KEY,
         hardware_irq=hardware_irq,
         trigger=trigger,
         source="devicetree",
         source_path=source_path,
-        metadata=(
-            ("specifier_format", "arm,gic"),
-            ("gic_interrupt_type", interrupt_type),
-            ("gic_interrupt_number", interrupt_number),
-            ("gic_flags", flags),
-            ("gic_hwirq_rule", rule),
-        ),
+        metadata=tuple(metadata),
     )
 
 
@@ -208,13 +219,9 @@ def _gic_interrupt_type_name(interrupt_type: int) -> str | None:
 
 def _gic_trigger(flags: int) -> str | None:
     if flags & 0x4:
-        return "level_high"
-    if flags & 0x8:
-        return "level_low"
+        return "level"
     if flags & 0x1:
-        return "edge_rising"
-    if flags & 0x2:
-        return "edge_falling"
+        return "edge"
     return None
 
 
@@ -234,6 +241,18 @@ def _runtime_controller_key(controller: str | None) -> str | None:
     if normalized.startswith("gic"):
         return GIC_CONTROLLER_KEY
     return None
+
+
+def _dt_interrupt_controller_paths(
+    tree: DeviceTree,
+    controller_key: str,
+) -> tuple[str, ...]:
+    return tuple(
+        node.path
+        for node in tree.iter_nodes()
+        if node.get_property("interrupt-controller") is not None
+        and _dt_provider_controller_key(node) == controller_key
+    )
 
 
 def _read_string_values(prop: DeviceTreeProperty | None) -> tuple[str, ...]:

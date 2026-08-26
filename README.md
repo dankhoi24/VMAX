@@ -2,9 +2,9 @@
 
 VMAX is an **Embedded System Topology & Correlation Explorer** for understanding how firmware description, operating-system runtime state, and hardware resources relate to each other.
 
-The project starts with Device Tree exploration and grows toward correlation across devices, drivers, MMIO, IRQs, DMA/IOMMU/IOVA, kernel symbols, snapshots, runtime events, and SoC-specific plugins.
+The project starts with Device Tree exploration and grows toward correlation across devices, drivers, MMIO, IRQs, DMA/IOMMU/IOVA, runtime events, diagnostics, and SoC-specific plugins.
 
-> **v0.4.0 — DT ↔ Linux Runtime Correlation:** connects static Device Tree descriptions with Linux runtime devices, bound drivers, and `/proc/iomem` physical-resource evidence using conservative, provenance-preserving correlation.
+> **v0.5.0 — Device Dependencies & IRQ Topology:** adds explicit hardware dependency modeling, Linux runtime IRQ collection/correlation, and an interactive focus graph on top of the v0.4 DT ↔ Linux runtime correlation foundation.
 
 ## Why VMAX
 
@@ -14,63 +14,79 @@ Low-level Linux and embedded debugging often requires jumping between multiple v
 - `/sys` and `/proc`
 - driver bindings
 - MMIO and reserved memory
-- IRQ routing
-- DMA and IOMMU mappings
-- kernel symbols and runtime events
+- clocks, resets, power domains, DMA and IOMMU dependencies
+- IRQ routing and Linux IRQ state
+- DMA/IOMMU mappings
+- runtime events
 
 VMAX aims to bring those views into one consistent model instead of treating them as separate tools and files.
 
-## v0.4.0 scope
+## v0.5.0 scope
 
-VMAX v0.4.0 connects the static Device Tree/addressing pipeline from v0.1/v0.2 with the Linux runtime explorer introduced in v0.3:
+VMAX v0.5.0 extends the static/runtime correlation foundation with explicit dependency and IRQ topology:
 
 ```text
-               Static                     Runtime
-                 |                           |
-            DeviceTree                 RuntimeDevice
-                 |                           |
-         AddressingReport              RuntimeDriver
-                 |                           |
-                 |                       /proc/iomem
-                 |                           |
-                 +------------+--------------+
-                              |
-                     CorrelationService
-                              |
-                              v
-                     CorrelationReport
-                              |
-                         FastAPI API
-                              |
-                         React UI
+Device Tree
+    |
+    v
+Dependency extraction
+    |
+    +-- clock
+    +-- reset
+    +-- power domain
+    +-- DMA
+    +-- IOMMU
+    +-- interrupt
+            |
+            v
+     IRQ correlation
+            |
+            v
+     Linux Runtime IRQ
+            |
+            v
+    Dependency API / UI
+            |
+            v
+       Focus Graph
 ```
 
-Implemented in v0.4.0:
+Implemented in v0.5.0:
 
 - all v0.1.0 Device Tree parsing, browsing, property inspection, and search capabilities
 - all v0.2.0 Device Tree addressing, `reg` / `ranges` interpretation, translation tracing, and physical address-space visualization
 - all v0.3.0 Linux runtime, local transport, and SSH runtime collection capabilities
-- exact Device Tree ↔ Linux runtime-device identity correlation through resolved runtime `of_node`
-- runtime-device ↔ bound-driver association using observed sysfs evidence
-- translated DT physical-range ↔ `/proc/iomem` correlation
-- explicit address relations: `exact`, `iomem_contains_dt`, `dt_contains_iomem`, `overlap`, `none`, `ambiguous`, and `unavailable`
-- preservation of all `/proc/iomem` candidates for ambiguous relations instead of guessing ownership
-- conservative semantics: physical address coincidence is supporting evidence, not proof that a device or driver owns a DT MMIO region
-- partial-source semantics where positive evidence remains usable while negative conclusions require complete source collection
-- explicit distinction between `unmatched` and `unavailable`
-- structured correlation warnings with source, DT-node, and runtime-device provenance
-- `GET /api/v1/correlation/devices`
-- frontend DT Runtime Correlation explorer with search, status filters, identity, driver, address-relation, warnings, and ambiguous-candidate views
+- all v0.4.0 DT ↔ runtime-device ↔ driver and `/proc/iomem` correlation capabilities
+- dependency domain for clock, reset, power-domain, DMA, IOMMU, and interrupt relationships
+- Device Tree dependency extraction with phandle/provider resolution, named entries, specifier preservation, and provenance
+- explicit and natural `interrupt-parent` handling plus `interrupts-extended`
+- Linux runtime IRQ collection from `/proc/interrupts` with supplemental `/sys/kernel/irq` and `/proc/irq` metadata
+- GIC SPI/PPI canonical hardware IRQ identity handling
+- conservative DT interrupt ↔ Linux runtime IRQ correlation using controller + HWIRQ identity
+- explicit dependency/correlation states: `resolved`, `unresolved`, `unavailable`, and `ambiguous`
+- partial-source semantics: usable static topology remains available when runtime IRQ collection is incomplete or unavailable
+- device-centric dependency API and runtime IRQ API
+- frontend Runtime Interrupts explorer
+- frontend Device Dependencies explorer with search, warnings, static/runtime status separation, and ambiguous IRQ candidates
+- interactive dependency focus graph with provider navigation and explicit relationship direction
 
-### Correlation semantics
+### Dependency semantics
 
-VMAX uses runtime `of_node` as the primary DT ↔ runtime-device identity evidence.
+VMAX models dependency direction as:
 
-VMAX deliberately does **not** infer device identity from compatible strings, device names, or physical-address coincidence.
+```text
+consumer -> provider
+```
 
-`/proc/iomem` correlation describes how translated DT physical ranges relate to Linux's physical resource tree. It does not by itself prove device or driver ownership of a region.
+For example, an IMR device can depend on a CPG clock provider even though the physical clock signal travels from CPG to IMR. Dependency direction describes service/resource dependency, not electrical signal direction.
 
-Runtime resources are reported only when a real runtime source exposes them. VMAX does not fabricate generic platform-device resources from interfaces that Linux does not provide as a stable platform-bus ABI.
+Runtime IRQ correlation is modeled separately:
+
+```text
+consumer -> interrupt controller -> Linux IRQ
+```
+
+The first edge is a static dependency; the second is a runtime mapping/correlation. A resolved relationship means VMAX found a unique provider or runtime identity. It does **not** prove the hardware is healthy or active.
 
 ## Architecture direction
 
@@ -119,15 +135,13 @@ SoC plugins
 - **v0.1 — Device Tree Explorer**: DTB parsing, domain model, API, tree browser, property panel, search — **complete**
 - **v0.2 — Memory/MMIO Map**: `reg`, `ranges`, address cells, memory regions, translation trace, address-space map — **complete**
 - **v0.3 — Linux Runtime Explorer**: `/sys`, `/proc`, runtime devices/drivers, `/proc/iomem`, local/SSH transport — **complete**
-- **v0.4 — DT ↔ Device ↔ Driver correlation** — **complete**
-- **v0.5 — IRQ and dependency graph** — **next**
-- **v0.6 — PCIe topology and snapshots**
-- **v0.7 — IOMMU/DMA foundation**
-- **v0.8 — Live event engine**
-- **v0.9 — R-Car/IPMMU plugin**
-- **v1.0 — Diff, diagnostics, packaging and tests**
-
-QNX support is planned after the Linux-oriented v1.0 core is stable.
+- **v0.4 — DT ↔ Runtime Correlation**: DT ↔ runtime-device ↔ driver and physical-resource correlation — **complete**
+- **v0.5 — Dependencies & IRQ Topology**: dependency extraction, runtime IRQ correlation, dependency UI, focus graph — **complete**
+- **v0.6 — Memory / DMA / IOMMU Foundation** — **next**
+- **v0.7 — Observability & Runtime Events**
+- **v0.8 — Flow Diagnostics**
+- **v0.9 — R-Car Platform Plugin**
+- **v1.0 — Stable Debugging Platform**
 
 ## Repository layout
 
@@ -138,8 +152,10 @@ backend/
 │   ├── api/
 │   ├── collectors/
 │   ├── correlation/
+│   ├── dependency/
+│   ├── devicetree/
+│   ├── interrupts/
 │   ├── model/
-│   ├── parsers/
 │   ├── runtime/
 │   └── services/
 └── tests/
@@ -148,6 +164,7 @@ frontend/
 ├── src/
 │   ├── api/
 │   ├── components/
+│   ├── graph/
 │   ├── models/
 │   ├── search/
 │   ├── App.tsx
@@ -185,13 +202,11 @@ The target does not need VMAX, Python, FastAPI, Node.js, or npm. It only needs S
 
 VMAX uses Python 3.11+ and `uv` for dependency management.
 
-Install the backend with the features needed for Device Tree and SSH runtime inspection:
-
 ```bash
 uv sync --extra dev --extra all
 ```
 
-The optional dependency groups are:
+Optional dependency groups:
 
 ```text
 dtb  -> pylibfdt
@@ -200,8 +215,6 @@ all  -> dtb + ssh
 ```
 
 ### 2. Configure a Device Tree source
-
-VMAX's static Device Tree view is independent from the Linux runtime view. Select a DTB file with:
 
 ```bash
 export VMAX_DTB_PATH=/path/to/board.dtb
@@ -220,8 +233,6 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ### 4. Remote SSH runtime mode
 
-Configure the remote target before starting the backend:
-
 ```bash
 export VMAX_RUNTIME_SSH_TARGET=192.168.0.2
 export VMAX_RUNTIME_SSH_USER=root
@@ -233,14 +244,14 @@ Authentication may use a key:
 export VMAX_RUNTIME_SSH_KEY=/path/to/private_key
 ```
 
-or a password:
+or password:
 
 ```bash
 read -s -p "Target password: " VMAX_RUNTIME_SSH_PASSWORD
 export VMAX_RUNTIME_SSH_PASSWORD
 ```
 
-Optional SSH configuration:
+Optional settings:
 
 ```bash
 export VMAX_RUNTIME_SSH_PORT=22
@@ -248,13 +259,11 @@ export VMAX_RUNTIME_SYSFS_ROOT=/sys
 export VMAX_RUNTIME_PROC_ROOT=/proc
 ```
 
-VMAX verifies SSH host keys by default. For a controlled lab target where accepting an unknown key is intentional, this can be explicitly enabled:
+VMAX verifies SSH host keys by default. For a controlled lab target where accepting an unknown key is intentional:
 
 ```bash
 export VMAX_RUNTIME_SSH_ACCEPT_UNKNOWN_HOST_KEY=1
 ```
-
-Do not use that setting as a substitute for host-key verification in normal deployments.
 
 Start the backend:
 
@@ -273,12 +282,14 @@ GET /api/v1/runtime/metadata
 GET /api/v1/runtime/devices
 GET /api/v1/runtime/drivers
 GET /api/v1/runtime/iomem
+GET /api/v1/runtime/interrupts
 GET /api/v1/correlation/devices
+GET /api/v1/dependencies/devices
 ```
 
 ### 5. Start the frontend
 
-Install a current Node.js LTS release, then from `frontend/`:
+From `frontend/`:
 
 ```bash
 npm install
@@ -289,37 +300,31 @@ Vite normally starts on port `5173` and proxies `/api` to the backend on port `8
 
 ### 6. Expected result
 
-With the static DTB and runtime backend configured, the browser provides:
+The browser provides:
 
-- expandable/collapsible Device Tree navigation
-- selected-node property inspection
-- decoded property values with optional raw-hex inspection
-- Device Tree search and navigation
-- semantic `reg` / `ranges` addressing information
-- bus-to-CPU Translation Trace
-- static physical Address Space Map
-- Linux runtime system metadata
-- runtime platform-device and driver browsing
-- bound-driver and runtime `of_node` metadata when exposed by sysfs
-- runtime `/proc/iomem` visualization
-- DT ↔ runtime-device identity correlation
-- runtime-device ↔ driver correlation
-- DT physical-range ↔ `/proc/iomem` relation visualization
-- explicit `unmatched` vs `unavailable` semantics
-- ambiguous address candidates and structured warnings
+- Device Tree navigation, properties, search, addressing, and address-space visualization
+- Linux runtime system/device/driver and `/proc/iomem` exploration
+- DT ↔ runtime-device ↔ driver and physical-resource correlation
+- runtime interrupt inventory with controller, HWIRQ, trigger, action, counts, and source metadata
+- device dependency inspection for clock, reset, power-domain, DMA, IOMMU, and interrupt resources
+- explicit static vs runtime resolution status
+- structured warnings without hiding usable partial data
+- ambiguous runtime IRQ candidates without guessing
+- interactive dependency focus graph with consumer → provider direction and provider → IRQ runtime mapping
 
 ## Tests
 
-Run backend tests from the repository root:
+Backend:
 
 ```bash
 export PYTHONPATH=backend
 uv run --extra dev --extra all python -m unittest discover -s backend/tests -v
 ```
 
-Run frontend tests, type checking, and the production build from `frontend/`:
+Frontend:
 
 ```bash
+cd frontend
 npm test
 npm run typecheck
 npm run build
@@ -327,21 +332,28 @@ npm run build
 
 ## Validation
 
-v0.4.0 has been validated through backend regression testing, frontend test/typecheck/build validation, and real-target correlation validation with the Linux runtime collection pipeline.
+v0.5.0 has been validated through backend regression coverage plus frontend test, typecheck, production-build, and UI validation.
 
-The v0.4 validation covers:
+The v0.5 dependency/IRQ validation covers:
 
-- DT ↔ runtime-device matching through resolved `of_node`
-- runtime-device ↔ driver association
-- translated DT physical ranges against `/proc/iomem`
-- exact, containment, overlap, none, ambiguous, and unavailable address semantics
-- partial-source behavior where positive evidence is retained while negative conclusions require complete scans
-- `unmatched` vs `unavailable`
-- frontend rendering of correlation state, address evidence, driver state, warnings, and ambiguous candidates
+- dependency extraction for clock, reset, power-domain, DMA, IOMMU, and interrupt relationships
+- provider resolution and preserved DT specifier/provenance data
+- GIC SPI/PPI translation, including the regression where DT SPI 150 maps to canonical GIC HWIRQ 182 rather than raw 150
+- resolved, unresolved, unavailable, and ambiguous runtime correlation semantics
+- partial runtime failure while preserving static dependency topology
+- device-centric API serialization
+- Runtime Interrupts and Device Dependencies frontend views
+- dependency focus graph topology, provider deduplication, IRQ deduplication, ambiguous candidates, unavailable runtime state, and provider navigation
 
-The v0.3 runtime foundation was validated against a real Renesas R-Car Linux target over SSH, including runtime metadata, platform devices, current driver bindings, runtime `of_node`, platform drivers, `/proc/iomem`, and browser rendering while the backend/frontend remained on the host.
+Frontend release validation for v0.5.0:
 
-The v0.2 addressing semantics were also validated with a real Raspberry Pi 5 DTB through the production parser and addressing pipeline, including exact RAM/reserved-memory regions, simple-bus translation, translation provenance, multiple `reg` resources, addresses above 4 GiB, and conservative handling of unsupported PCI 3-cell address formats.
+```text
+21 test files
+125 tests passed
+TypeScript typecheck passed
+Production build passed
+UI validation passed
+```
 
 ## Design principles
 
@@ -350,15 +362,15 @@ The v0.2 addressing semantics were also validated with a real Raspberry Pi 5 DTB
 - **Be conservative when uncertain**: unsupported or ambiguous semantics produce structured warnings rather than fabricated mappings.
 - **Keep libfdt behind an adapter boundary**: pylibfdt objects do not leak into the domain model.
 - **Separate syntax from semantics**: parsing/decoding stays separate from addressing interpretation and runtime correlation.
-- **Keep static and runtime evidence explicit**: Device Tree and Linux runtime remain separate sources connected only through an explicit correlation layer.
-- **Use `of_node` as primary identity evidence**: do not infer identity from names, compatible strings, or address coincidence.
+- **Keep static and runtime evidence explicit**: static dependency resolution and runtime correlation are separate facts.
+- **Use stable identity evidence**: avoid guessing device or IRQ identity from names alone.
 - **Treat `/proc/iomem` as supporting address evidence**: range relationships do not prove ownership.
 - **Keep the core generic**: platform-specific support should build on common parser, model, provider, and transport contracts.
-- **Preserve provenance**: translated addresses and warnings retain the evidence that produced them.
+- **Preserve provenance**: dependency references, translated addresses, runtime fields, and warnings retain their evidence source.
 - **Prefer partial observability over fabricated certainty**: positive evidence remains usable, while unavailable or incomplete information never becomes a false negative conclusion.
 
 ## Project status
 
-VMAX v0.4.0 is the fourth public development release. It connects the static Device Tree/address-space explorers with Linux runtime devices, drivers, and `/proc/iomem` evidence through an explicit correlation layer.
+VMAX v0.5.0 is the fifth public development release. It extends the static/runtime correlation foundation with explicit hardware dependency modeling, Linux IRQ correlation, and dependency topology visualization.
 
-The next milestone is **v0.5 — IRQ and dependency graph**.
+The next milestone is **v0.6 — Memory / DMA / IOMMU Foundation**.

@@ -18,6 +18,7 @@ from app.interrupts import (
     InterruptMatchMethod,
 )
 from app.runtime import RuntimeInterrupt
+from app.runtime.model import MetadataValue
 
 
 class DependencyWarningResponse(BaseModel):
@@ -25,6 +26,7 @@ class DependencyWarningResponse(BaseModel):
     message: str
     consumer_dt_path: str | None = None
     provider_dt_path: str | None = None
+    runtime_irq: int | None = None
     source_path: str | None = None
 
 
@@ -44,6 +46,7 @@ class DependencyRuntimeInterruptResponse(BaseModel):
     actions: list[str]
     total_count: int
     source_path: str
+    metadata: list[tuple[str, MetadataValue]]
 
 
 class DeviceDependencyResponse(BaseModel):
@@ -170,6 +173,7 @@ def _runtime_interrupt_required_to_response(
         actions=list(interrupt.actions),
         total_count=interrupt.total_count,
         source_path=interrupt.source_path,
+        metadata=list(interrupt.metadata),
     )
 
 
@@ -181,6 +185,7 @@ def _warning_to_response(
         message=warning.message,
         consumer_dt_path=warning.consumer_dt_path,
         provider_dt_path=warning.provider_dt_path,
+        runtime_irq=warning.runtime_irq,
         source_path=warning.source_path,
     )
 
@@ -193,5 +198,6 @@ def _interrupt_warning_to_response(
         message=warning.message,
         consumer_dt_path=warning.consumer_dt_path,
         provider_dt_path=warning.provider_dt_path,
+        runtime_irq=warning.runtime_irq,
         source_path=warning.source_path,
     )

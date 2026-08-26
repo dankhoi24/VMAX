@@ -7,9 +7,11 @@ from app.api.schemas.runtime import (
     RuntimeDriverCollectionResponse,
     RuntimeIomemCollectionResponse,
     RuntimeMetadataCollectionResponse,
+    RuntimeInterruptCollectionResponse,
     runtime_device_collection_to_response,
     runtime_driver_collection_to_response,
     runtime_iomem_collection_to_response,
+    runtime_interrupt_collection_to_response,
     runtime_metadata_collection_to_response,
 )
 from app.runtime import RuntimeProvider
@@ -48,3 +50,10 @@ def get_runtime_iomem(
     provider: RuntimeProvider = Depends(get_runtime_provider),
 ) -> RuntimeIomemCollectionResponse:
     return runtime_iomem_collection_to_response(provider.collect_iomem())
+
+
+@router.get("/interrupts", response_model=RuntimeInterruptCollectionResponse)
+def get_runtime_interrupts(
+    provider: RuntimeProvider = Depends(get_runtime_provider),
+) -> RuntimeInterruptCollectionResponse:
+    return runtime_interrupt_collection_to_response(provider.collect_interrupts())

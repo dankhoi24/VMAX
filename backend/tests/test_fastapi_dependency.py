@@ -3,6 +3,13 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.dependency import DependencyKind
+from app.interrupts import (
+    InterruptCorrelation,
+    InterruptCorrelationReport,
+    InterruptCorrelationResolution,
+    InterruptCorrelationWarning,
+)
 from app.main import create_app
 from app.model.devicetree import (
     DeviceTree,
@@ -67,6 +74,27 @@ class FakeRuntimeProvider:
         return self.interrupts
 
 
+class FakeInterruptCorrelationService:
+    def __init__(self, warning: InterruptCorrelationWarning) -> None:
+        self.warning = warning
+
+    def correlate(self, **kwargs: object) -> InterruptCorrelationReport:
+        dependencies = kwargs["dependencies"]
+        for dependency in dependencies:
+            if dependency.kind == DependencyKind.INTERRUPT:
+                return InterruptCorrelationReport(
+                    correlations=(
+                        InterruptCorrelation(
+                            dependency=dependency,
+                            resolution=InterruptCorrelationResolution.AMBIGUOUS,
+                            warnings=(self.warning,),
+                        ),
+                    ),
+                    warnings=(self.warning,),
+                )
+        return InterruptCorrelationReport(warnings=(self.warning,))
+
+
 class FastApiDependencyTest(unittest.TestCase):
     def test_dependency_devices_returns_device_centric_json(self) -> None:
         provider = FakeRuntimeProvider(
@@ -79,6 +107,12 @@ class FastApiDependencyTest(unittest.TestCase):
                         hardware_irq=182,
                         trigger="Level",
                         actions=("imr",),
+                        metadata=(
+                            (
+                                "hardware_irq_source",
+                                "/sys/kernel/irq/214/hwirq",
+                            ),
+                        ),
                     ),
                 )
             )
@@ -123,7 +157,78 @@ class FastApiDependencyTest(unittest.TestCase):
         self.assertEqual(interrupt["runtime_interrupt"]["hardware_irq"], 182)
         self.assertEqual(interrupt["runtime_interrupt"]["total_count"], 4291)
         self.assertEqual(interrupt["runtime_interrupt"]["actions"], ["imr"])
+        self.assertEqual(
+            interrupt["runtime_interrupt"]["metadata"],
+            [["hardware_irq_source", "/sys/kernel/irq/214/hwirq"]],
+        )
         self.assertEqual(len(interrupt["runtime_candidates"]), 1)
+
+    def test_dependency_devices_preserves_ambiguous_runtime_irq_candidates(
+        self,
+    ) -> None:
+        irq_a = RuntimeInterrupt(
+            irq=214,
+            counts=(1,),
+            controller="GICv3",
+            hardware_irq=182,
+        )
+        irq_b = RuntimeInterrupt(
+            irq=215,
+            counts=(2,),
+            controller="GICv3",
+            hardware_irq=182,
+        )
+        provider = FakeRuntimeProvider(
+            interrupts=RuntimeCollection(data=(irq_a, irq_b))
+        )
+        client = TestClient(
+            create_app(
+                devicetree_state=_devicetree_state(sample_tree()),
+                runtime_provider=provider,
+            )
+        )
+
+        response = client.get("/api/v1/dependencies/devices")
+
+        self.assertEqual(response.status_code, 200)
+        interrupt = response.json()["data"][0]["dependencies"][2]
+        self.assertEqual(interrupt["interrupt_resolution"], "ambiguous")
+        self.assertIsNone(interrupt["runtime_interrupt"])
+        self.assertEqual(
+            [candidate["irq"] for candidate in interrupt["runtime_candidates"]],
+            [214, 215],
+        )
+        self.assertEqual(
+            interrupt["interrupt_warnings"][0]["code"],
+            "RUNTIME_INTERRUPT_MATCH_AMBIGUOUS",
+        )
+
+    def test_dependency_warnings_preserve_runtime_irq(self) -> None:
+        warning = InterruptCorrelationWarning(
+            code="IRQ_METADATA_AMBIGUOUS",
+            message="IRQ metadata is ambiguous",
+            consumer_dt_path="/soc/imr@e6260000",
+            provider_dt_path="/soc/interrupt-controller@f1000000",
+            runtime_irq=214,
+            source_path="/sys/kernel/irq/214/hwirq",
+        )
+        client = TestClient(
+            create_app(
+                devicetree_state=_devicetree_state(sample_tree()),
+                runtime_provider=FakeRuntimeProvider(),
+                interrupt_correlation_service=FakeInterruptCorrelationService(
+                    warning
+                ),
+            )
+        )
+
+        response = client.get("/api/v1/dependencies/devices")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["warnings"][0]["runtime_irq"], 214)
+        interrupt = body["data"][0]["dependencies"][2]
+        self.assertEqual(interrupt["interrupt_warnings"][0]["runtime_irq"], 214)
 
     def test_dependency_devices_preserves_interrupt_unavailable_semantics(self) -> None:
         provider = FakeRuntimeProvider(
@@ -214,6 +319,14 @@ class FastApiDependencyTest(unittest.TestCase):
         self.assertIn("DeviceDependencyViewResponse", schemas)
         self.assertIn("DeviceDependencyResponse", schemas)
         self.assertIn("DependencyRuntimeInterruptResponse", schemas)
+        self.assertIn(
+            "metadata",
+            schemas["DependencyRuntimeInterruptResponse"]["properties"],
+        )
+        self.assertIn(
+            "runtime_irq",
+            schemas["DependencyWarningResponse"]["properties"],
+        )
         self.assertEqual(
             schemas["DeviceDependencyResponse"]["properties"][
                 "static_resolution"

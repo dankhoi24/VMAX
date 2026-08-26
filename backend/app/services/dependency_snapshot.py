@@ -110,6 +110,7 @@ def _interrupt_warnings_to_dependency_warnings(
             message=warning.message,
             consumer_dt_path=warning.consumer_dt_path,
             provider_dt_path=warning.provider_dt_path,
+            runtime_irq=warning.runtime_irq,
             source_path=warning.source_path,
         )
         for warning in warnings

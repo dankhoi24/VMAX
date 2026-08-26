@@ -31,6 +31,7 @@ class DependencyViewWarning:
     message: str
     consumer_dt_path: str | None = None
     provider_dt_path: str | None = None
+    runtime_irq: int | None = None
     source_path: str | None = None
 
     def __post_init__(self) -> None:
@@ -44,6 +45,11 @@ class DependencyViewWarning:
             self.provider_dt_path,
             "DependencyViewWarning.provider_dt_path",
         )
+        if self.runtime_irq is not None:
+            _validate_non_negative_int(
+                self.runtime_irq,
+                "DependencyViewWarning.runtime_irq",
+            )
         _validate_optional_absolute_path(
             self.source_path,
             "DependencyViewWarning.source_path",
@@ -332,3 +338,10 @@ def _validate_absolute_path(value: str, field_name: str) -> None:
 def _validate_optional_absolute_path(value: str | None, field_name: str) -> None:
     if value is not None:
         _validate_absolute_path(value, field_name)
+
+
+def _validate_non_negative_int(value: int, field_name: str) -> None:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"{field_name} must be an int")
+    if value < 0:
+        raise ValueError(f"{field_name} must be >= 0")

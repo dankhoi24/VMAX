@@ -217,6 +217,61 @@ class FastApiRuntimeTest(unittest.TestCase):
         self.assertEqual(body["data"][0]["children"][0]["name"], "Kernel code")
         self.assertEqual(body["data"][0]["children"][0]["size"], 0x180000)
 
+    def test_runtime_interrupts_returns_irq_inventory(self) -> None:
+        provider = FakeRuntimeProvider(
+            interrupts=RuntimeCollection(
+                data=(
+                    RuntimeInterrupt(
+                        irq=214,
+                        counts=(0, 4291, 0, 0),
+                        controller="GICv3",
+                        hardware_irq=182,
+                        trigger="Level",
+                        actions=("imr",),
+                        raw_line=(
+                            "214: 0 4291 0 0 GICv3 182 Level imr"
+                        ),
+                        metadata=(
+                            (
+                                "hardware_irq_source",
+                                "/sys/kernel/irq/214/hwirq",
+                            ),
+                        ),
+                    ),
+                )
+            )
+        )
+        client = TestClient(create_app(runtime_provider=provider))
+
+        response = client.get("/api/v1/runtime/interrupts")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "data": [
+                    {
+                        "irq": 214,
+                        "counts": [0, 4291, 0, 0],
+                        "controller": "GICv3",
+                        "hardware_irq": 182,
+                        "trigger": "Level",
+                        "actions": ["imr"],
+                        "raw_line": "214: 0 4291 0 0 GICv3 182 Level imr",
+                        "source_path": "/proc/interrupts",
+                        "metadata": [
+                            [
+                                "hardware_irq_source",
+                                "/sys/kernel/irq/214/hwirq",
+                            ],
+                        ],
+                        "total_count": 4291,
+                    }
+                ],
+                "warnings": [],
+            },
+        )
+
     def test_runtime_warnings_are_http_200_partial_success(self) -> None:
         provider = FakeRuntimeProvider(
             devices=RuntimeCollection(
@@ -277,12 +332,43 @@ class FastApiRuntimeTest(unittest.TestCase):
             "PROC_IOMEM_ADDRESSES_REDACTED",
         )
 
+    def test_runtime_interrupt_warnings_are_http_200(self) -> None:
+        provider = FakeRuntimeProvider(
+            interrupts=RuntimeCollection(
+                data=(),
+                warnings=(
+                    RuntimeWarning(
+                        code="PROC_INTERRUPTS_READ_FAILED",
+                        message="Unable to read /proc/interrupts",
+                        source_path="/proc/interrupts",
+                    ),
+                ),
+            )
+        )
+        client = TestClient(create_app(runtime_provider=provider))
+
+        response = client.get("/api/v1/runtime/interrupts")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"], [])
+        self.assertEqual(
+            response.json()["warnings"],
+            [
+                {
+                    "code": "PROC_INTERRUPTS_READ_FAILED",
+                    "message": "Unable to read /proc/interrupts",
+                    "source_path": "/proc/interrupts",
+                }
+            ],
+        )
+
     def test_runtime_endpoints_call_only_matching_collector(self) -> None:
         cases = (
             ("/api/v1/runtime/metadata", "system"),
             ("/api/v1/runtime/devices", "devices"),
             ("/api/v1/runtime/drivers", "drivers"),
             ("/api/v1/runtime/iomem", "iomem"),
+            ("/api/v1/runtime/interrupts", "interrupts"),
         )
 
         for path, expected_call in cases:
@@ -309,6 +395,8 @@ class FastApiRuntimeTest(unittest.TestCase):
         self.assertIn("RuntimeDeviceCollectionResponse", schemas)
         self.assertIn("RuntimeDriverCollectionResponse", schemas)
         self.assertIn("RuntimeIomemCollectionResponse", schemas)
+        self.assertIn("RuntimeInterruptCollectionResponse", schemas)
+        self.assertIn("RuntimeInterruptResponse", schemas)
         self.assertIn("RuntimeWarningResponse", schemas)
         self.assertEqual(
             schemas["RuntimeResourceResponse"]["properties"]["start"]["type"],
@@ -318,11 +406,21 @@ class FastApiRuntimeTest(unittest.TestCase):
             schemas["IomemRegionResponse"]["properties"]["end"]["type"],
             "integer",
         )
+        self.assertIn(
+            "metadata",
+            schemas["RuntimeInterruptResponse"]["properties"],
+        )
         self.assertEqual(
             response.json()["paths"]["/api/v1/runtime/devices"]["get"][
                 "responses"
             ]["200"]["content"]["application/json"]["schema"]["$ref"],
             "#/components/schemas/RuntimeDeviceCollectionResponse",
+        )
+        self.assertEqual(
+            response.json()["paths"]["/api/v1/runtime/interrupts"]["get"][
+                "responses"
+            ]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/RuntimeInterruptCollectionResponse",
         )
 
 

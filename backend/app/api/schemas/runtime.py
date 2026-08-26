@@ -8,6 +8,7 @@ from app.runtime.model import (
     RuntimeCollection,
     RuntimeDevice,
     RuntimeDriver,
+    RuntimeInterrupt,
     RuntimeResource,
     RuntimeSystemInfo,
     RuntimeWarning,
@@ -38,6 +39,19 @@ class RuntimeResourceResponse(BaseModel):
     flag_names: list[str]
     name: str | None = None
     size: int
+
+
+class RuntimeInterruptResponse(BaseModel):
+    irq: int
+    counts: list[int]
+    controller: str | None = None
+    hardware_irq: int | None = None
+    trigger: str | None = None
+    actions: list[str]
+    raw_line: str | None = None
+    source_path: str
+    metadata: list[tuple[str, MetadataValue]]
+    total_count: int
 
 
 class RuntimeDeviceResponse(BaseModel):
@@ -90,6 +104,11 @@ class RuntimeIomemCollectionResponse(BaseModel):
     warnings: list[RuntimeWarningResponse]
 
 
+class RuntimeInterruptCollectionResponse(BaseModel):
+    data: list[RuntimeInterruptResponse]
+    warnings: list[RuntimeWarningResponse]
+
+
 def runtime_metadata_collection_to_response(
     collection: RuntimeCollection[RuntimeSystemInfo],
 ) -> RuntimeMetadataCollectionResponse:
@@ -122,6 +141,15 @@ def runtime_iomem_collection_to_response(
 ) -> RuntimeIomemCollectionResponse:
     return RuntimeIomemCollectionResponse(
         data=[_iomem_region_to_response(region) for region in collection.data],
+        warnings=_warnings_to_response(collection.warnings),
+    )
+
+
+def runtime_interrupt_collection_to_response(
+    collection: RuntimeCollection[tuple[RuntimeInterrupt, ...]],
+) -> RuntimeInterruptCollectionResponse:
+    return RuntimeInterruptCollectionResponse(
+        data=[_interrupt_to_response(interrupt) for interrupt in collection.data],
         warnings=_warnings_to_response(collection.warnings),
     )
 
@@ -173,6 +201,21 @@ def _driver_to_response(driver: RuntimeDriver) -> RuntimeDriverResponse:
         module_name=driver.module_name,
         bound_device_paths=list(driver.bound_device_paths),
         metadata=list(driver.metadata),
+    )
+
+
+def _interrupt_to_response(interrupt: RuntimeInterrupt) -> RuntimeInterruptResponse:
+    return RuntimeInterruptResponse(
+        irq=interrupt.irq,
+        counts=list(interrupt.counts),
+        controller=interrupt.controller,
+        hardware_irq=interrupt.hardware_irq,
+        trigger=interrupt.trigger,
+        actions=list(interrupt.actions),
+        raw_line=interrupt.raw_line,
+        source_path=interrupt.source_path,
+        metadata=list(interrupt.metadata),
+        total_count=interrupt.total_count,
     )
 
 

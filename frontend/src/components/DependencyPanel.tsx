@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { ApiError, getDependencyDevices } from "../api/dependencies";
+import { buildDependencyGraph } from "../graph/dependencyGraph";
 import type {
   DependencyDevicesResponse,
   DependencyKind,
@@ -9,6 +10,7 @@ import type {
   DeviceDependencyView,
 } from "../models/dependency";
 import { AddressingIcon, SearchIcon, XIcon } from "./icons";
+import { DependencyGraph } from "./DependencyGraph";
 import { DependencySection } from "./DependencySection";
 import { DependencyWarnings } from "./DependencyRow";
 
@@ -195,7 +197,14 @@ export function DependencyPanel({ refreshToken = 0 }: DependencyPanelProps) {
               )}
             </div>
 
-            <DependencyDetails view={selectedView} />
+            <DependencyDetails
+              view={selectedView}
+              views={views}
+              onSelectDevicePath={(path) => {
+                setQuery("");
+                setSelectedPath(path);
+              }}
+            />
           </div>
         </>
       )}
@@ -235,9 +244,20 @@ function SummaryItem({ label, value }: SummaryItemProps) {
 
 interface DependencyDetailsProps {
   view: DeviceDependencyView | null;
+  views: DeviceDependencyView[];
+  onSelectDevicePath: (path: string) => void;
 }
 
-function DependencyDetails({ view }: DependencyDetailsProps) {
+function DependencyDetails({
+  view,
+  views,
+  onSelectDevicePath,
+}: DependencyDetailsProps) {
+  const graph = useMemo(
+    () => (view ? buildDependencyGraph(view, views) : null),
+    [view, views],
+  );
+
   if (!view) {
     return (
       <aside className="dependency-detail" aria-label="Dependency detail">
@@ -254,6 +274,12 @@ function DependencyDetails({ view }: DependencyDetailsProps) {
           {view.dependencies.length.toLocaleString()}
         </span>
       </div>
+      {graph && (
+        <DependencyGraph
+          graph={graph}
+          onSelectDtPath={onSelectDevicePath}
+        />
+      )}
       {dependencyKinds.map((kind) => (
         <DependencySection
           key={kind}

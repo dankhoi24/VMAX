@@ -86,6 +86,7 @@ button {
 
 .button-icon,
 .copy-icon,
+.dependency-graph-node-icon,
 .empty-icon,
 .panel-icon,
 .runtime-search-icon,
@@ -103,6 +104,7 @@ button {
 
 .button-icon,
 .copy-icon,
+.dependency-graph-node-icon,
 .panel-icon,
 .runtime-search-icon,
 .search-clear-icon,
@@ -1523,6 +1525,192 @@ button {
   font-size: 13px;
   font-weight: 700;
   min-width: 0;
+}
+
+.dependency-graph-panel {
+  border-bottom: 1px solid var(--border);
+}
+
+.dependency-graph-heading {
+  align-items: center;
+  background: var(--surface-tint);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 14px;
+}
+
+.dependency-graph-heading h3 {
+  color: var(--text);
+  font-size: 14px;
+  margin: 0;
+}
+
+.dependency-graph-heading span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dependency-graph-caption {
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+  padding: 8px 14px;
+}
+
+.dependency-graph-scroll {
+  overflow-x: auto;
+  padding: 12px 14px;
+}
+
+.dependency-graph-canvas {
+  min-width: 760px;
+  position: relative;
+}
+
+.dependency-graph-edges {
+  inset: 0;
+  overflow: visible;
+  position: absolute;
+}
+
+.dependency-graph-edge path {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.dependency-graph-edge text {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  paint-order: stroke;
+  pointer-events: none;
+  stroke: var(--surface);
+  stroke-width: 5px;
+  text-anchor: middle;
+  text-transform: uppercase;
+}
+
+.dependency-graph-edge-resolved path {
+  stroke: #8bc6a0;
+}
+
+.dependency-graph-edge-unavailable path {
+  stroke: #e7c269;
+  stroke-dasharray: 5 5;
+}
+
+.dependency-graph-edge-unresolved path {
+  stroke: #b8c0ca;
+  stroke-dasharray: 5 5;
+}
+
+.dependency-graph-edge-ambiguous path {
+  stroke: #c6afe3;
+  stroke-dasharray: 4 4;
+}
+
+.dependency-graph-arrow-resolved {
+  fill: #8bc6a0;
+}
+
+.dependency-graph-arrow-unavailable {
+  fill: #e7c269;
+}
+
+.dependency-graph-arrow-unresolved {
+  fill: #b8c0ca;
+}
+
+.dependency-graph-arrow-ambiguous {
+  fill: #c6afe3;
+}
+
+.dependency-graph-node {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  position: absolute;
+  text-align: left;
+  z-index: 1;
+}
+
+button.dependency-graph-node {
+  cursor: pointer;
+}
+
+button.dependency-graph-node:hover {
+  background: var(--accent-wash);
+  border-color: var(--border-strong);
+}
+
+.dependency-graph-node-icon {
+  color: var(--accent-strong);
+}
+
+.dependency-graph-node span {
+  min-width: 0;
+}
+
+.dependency-graph-node strong {
+  color: var(--text);
+  display: block;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dependency-graph-node small {
+  color: var(--muted);
+  display: block;
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.25;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dependency-graph-node-focus {
+  background: var(--accent-soft);
+  border-color: var(--border-strong);
+  box-shadow: inset 3px 0 var(--accent), var(--shadow);
+}
+
+.dependency-graph-node-provider {
+  border-color: #bfd7f5;
+}
+
+.dependency-graph-node-runtime_irq {
+  border-color: #d6c1ee;
+}
+
+.dependency-graph-node-resolved {
+  border-left: 4px solid #8bc6a0;
+}
+
+.dependency-graph-node-unavailable {
+  border-left: 4px solid #e7c269;
+}
+
+.dependency-graph-node-unresolved {
+  border-left: 4px solid #b8c0ca;
+}
+
+.dependency-graph-node-ambiguous {
+  border-left: 4px solid #c6afe3;
 }
 
 .dependency-section {

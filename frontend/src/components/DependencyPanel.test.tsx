@@ -181,6 +181,31 @@ describe("DependencyPanel", () => {
     expect(within(list).queryByText("/soc/i2c@e6500000")).toBeNull();
   });
 
+  it("selects provider devices from the focus graph", async () => {
+    getDependencyDevicesMock.mockResolvedValue(
+      response([
+        imrView,
+        {
+          dt_node_path: "/soc/cpg@e6150000",
+          dependencies: [],
+        },
+      ]),
+    );
+
+    render(<DependencyPanel />);
+
+    expect(await screen.findByText("Focus Graph")).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Select dependency graph node cpg@e6150000",
+      }),
+    );
+
+    const detail = screen.getByLabelText("Dependency detail");
+    expect(detail.textContent).toContain("/soc/cpg@e6150000");
+  });
+
   it("shows ambiguous runtime IRQ candidates explicitly", async () => {
     const ambiguousInterrupt: DeviceDependency = {
       ...interruptDependency,

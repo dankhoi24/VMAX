@@ -6,6 +6,13 @@ from app.dependency.model import (
     DependencyResolution,
 )
 from app.dependency.devicetree import DeviceTreeDependencyExtractor
+from app.dependency.core import (
+    DependencyViewBuilder,
+    DependencyViewReport,
+    DependencyViewWarning,
+    DeviceDependency,
+    DeviceDependencyView,
+)
 
 __all__ = [
     "DependencyEvidence",
@@ -13,5 +20,10 @@ __all__ = [
     "DependencyKind",
     "DependencyReference",
     "DependencyResolution",
+    "DependencyViewBuilder",
+    "DependencyViewReport",
+    "DependencyViewWarning",
     "DeviceTreeDependencyExtractor",
+    "DeviceDependency",
+    "DeviceDependencyView",
 ]

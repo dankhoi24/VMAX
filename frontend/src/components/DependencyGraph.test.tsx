@@ -67,7 +67,7 @@ describe("DependencyGraph", () => {
     const panel = screen.getByLabelText("Dependency graph");
     expect(panel.textContent).toContain("Focus Graph");
     expect(panel.textContent).toContain(
-      "Dependency direction: consumer -> provider -> runtime",
+      "Static dependency: consumer -> provider · Runtime mapping: provider -> IRQ",
     );
     expect(panel.textContent).toContain("imr@e6260000");
     expect(panel.textContent).toContain("cpg@e6150000");

@@ -395,6 +395,8 @@ class _RuntimeFixtureSession:
             return SshCommandResult(returncode=1)
         if "vmax:ssh-runtime:is_dir" in script and "/sys/kernel/irq" in script:
             return SshCommandResult(returncode=1)
+        if "vmax:ssh-runtime:is_dir" in script and "/proc/irq" in script:
+            return SshCommandResult(returncode=1)
         if "vmax:ssh-runtime:is_dir" in script:
             return SshCommandResult(returncode=0)
         if "vmax:ssh-runtime:readlink" in script:

@@ -32,6 +32,8 @@ class RuntimeInterruptsParserTest(unittest.TestCase):
         self.assertEqual(interrupt.actions, ("imr",))
         self.assertEqual(interrupt.source_path, "/proc/interrupts")
         self.assertIn("GICv3", interrupt.raw_line or "")
+        self.assertIn(("primary_source", "/proc/interrupts"), interrupt.metadata)
+        self.assertIn(("hardware_irq_source", "/proc/interrupts"), interrupt.metadata)
 
     def test_parse_proc_interrupts_skips_headers_and_non_linux_irq_rows(self) -> None:
         result = parse_proc_interrupts_file(
@@ -47,6 +49,24 @@ class RuntimeInterruptsParserTest(unittest.TestCase):
 
         self.assertEqual(result.warnings, ())
         self.assertEqual(tuple(interrupt.irq for interrupt in result.data), (210,))
+
+    def test_cpu_header_defines_exact_count_columns(self) -> None:
+        result = parse_proc_interrupts_file(
+            "\n".join(
+                (
+                    "           CPU0       CPU1       CPU2       CPU3",
+                    "182:          0       4291          0  GICv3  150 Level imr",
+                    "210:        105          0          0          0  GICv3  178 Level isp",
+                )
+            )
+        )
+
+        self.assertEqual(len(result.data), 1)
+        self.assertEqual(result.data[0].irq, 210)
+        self.assertEqual(result.data[0].counts, (105, 0, 0, 0))
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(result.warnings[0].code, PROC_INTERRUPTS_PARSE_FAILED)
+        self.assertIn("expected 4 CPU counters", result.warnings[0].message)
 
     def test_parse_proc_interrupts_reports_malformed_numeric_irq_row(self) -> None:
         result = parse_proc_interrupts_file(

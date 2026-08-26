@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.runtime.model import (
     IomemRegion,
+    MetadataValue,
     RuntimeCollection,
     RuntimeDevice,
     RuntimeDriver,
@@ -244,13 +245,17 @@ class LinuxRuntimeProvider(RuntimeProvider):
 
         parsed = parse_proc_interrupts_file(text, runtime_path)
         warnings = list(parsed.warnings)
-        if self._sysfs_irq_root_available(warnings):
-            interrupts = tuple(
-                self._enrich_interrupt_from_sysfs(interrupt, warnings)
-                for interrupt in parsed.data
+        sysfs_irq_available = self._sysfs_irq_root_available(warnings)
+        proc_irq_available = self._proc_irq_root_available(warnings)
+        interrupts = tuple(
+            self._enrich_interrupt(
+                interrupt,
+                warnings,
+                sysfs_irq_available=sysfs_irq_available,
+                proc_irq_available=proc_irq_available,
             )
-        else:
-            interrupts = parsed.data
+            for interrupt in parsed.data
+        )
 
         return RuntimeCollection(data=interrupts, warnings=tuple(warnings))
 
@@ -445,46 +450,88 @@ class LinuxRuntimeProvider(RuntimeProvider):
             )
             return False
 
-    def _enrich_interrupt_from_sysfs(
+    def _proc_irq_root_available(self, warnings: list[RuntimeWarning]) -> bool:
+        runtime_path = self._proc_runtime_path("irq")
+        try:
+            return self._transport.is_dir(self._proc_access_path("irq"))
+        except (FileNotFoundError, NotADirectoryError):
+            return False
+        except OSError as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="PROC_IRQ_METADATA_READ_FAILED",
+                    source_path=runtime_path,
+                    message=(
+                        f"Unable to inspect {runtime_path}: "
+                        f"{_format_error(error)}"
+                    ),
+                )
+            )
+            return False
+
+    def _enrich_interrupt(
         self,
         interrupt: RuntimeInterrupt,
         warnings: list[RuntimeWarning],
+        *,
+        sysfs_irq_available: bool,
+        proc_irq_available: bool,
     ) -> RuntimeInterrupt:
-        actions_text = self._read_sysfs_irq_metadata(
-            interrupt.irq,
-            "actions",
-            warnings,
-        )
-        chip_name = self._read_sysfs_irq_metadata(
-            interrupt.irq,
-            "chip_name",
-            warnings,
-        )
-        hwirq_text = self._read_sysfs_irq_metadata(
-            interrupt.irq,
-            "hwirq",
-            warnings,
-        )
-        trigger = self._read_sysfs_irq_metadata(
-            interrupt.irq,
-            "type",
-            warnings,
-        )
         metadata = list(interrupt.metadata)
+        actions_text = None
+        chip_name = None
+        hwirq_text = None
+        trigger = None
 
-        for field_name in ("smp_affinity_list", "effective_affinity_list"):
-            value = self._read_sysfs_irq_metadata(
+        if sysfs_irq_available:
+            actions_text = self._read_sysfs_irq_metadata(
                 interrupt.irq,
-                field_name,
+                "actions",
                 warnings,
             )
-            if value is not None:
-                metadata.append((field_name, value))
+            chip_name = self._read_sysfs_irq_metadata(
+                interrupt.irq,
+                "chip_name",
+                warnings,
+            )
+            hwirq_text = self._read_sysfs_irq_metadata(
+                interrupt.irq,
+                "hwirq",
+                warnings,
+            )
+            trigger = self._read_sysfs_irq_metadata(
+                interrupt.irq,
+                "type",
+                warnings,
+            )
+
+        if proc_irq_available:
+            for field_name in ("smp_affinity_list", "effective_affinity_list"):
+                value = self._read_proc_irq_metadata(
+                    interrupt.irq,
+                    field_name,
+                    warnings,
+                )
+                if value is not None:
+                    runtime_path = self._proc_runtime_path(
+                        f"irq/{interrupt.irq}/{field_name}"
+                    )
+                    metadata = _upsert_metadata(metadata, field_name, value)
+                    metadata = _upsert_metadata(
+                        metadata,
+                        f"{field_name}_source",
+                        runtime_path,
+                    )
 
         hardware_irq = interrupt.hardware_irq
         if hwirq_text is not None:
             try:
                 hardware_irq = int(hwirq_text, 0)
+                metadata = _upsert_metadata(
+                    metadata,
+                    "hardware_irq_source",
+                    self._sysfs_runtime_path(f"kernel/irq/{interrupt.irq}/hwirq"),
+                )
             except ValueError as error:
                 runtime_path = self._sysfs_runtime_path(
                     f"kernel/irq/{interrupt.irq}/hwirq"
@@ -503,6 +550,25 @@ class LinuxRuntimeProvider(RuntimeProvider):
         actions = interrupt.actions
         if actions_text is not None:
             actions = parse_interrupt_actions(actions_text)
+            metadata = _upsert_metadata(
+                metadata,
+                "actions_source",
+                self._sysfs_runtime_path(f"kernel/irq/{interrupt.irq}/actions"),
+            )
+
+        if chip_name is not None:
+            metadata = _upsert_metadata(
+                metadata,
+                "controller_source",
+                self._sysfs_runtime_path(f"kernel/irq/{interrupt.irq}/chip_name"),
+            )
+
+        if trigger is not None:
+            metadata = _upsert_metadata(
+                metadata,
+                "trigger_source",
+                self._sysfs_runtime_path(f"kernel/irq/{interrupt.irq}/type"),
+            )
 
         return replace(
             interrupt,
@@ -533,6 +599,37 @@ class LinuxRuntimeProvider(RuntimeProvider):
             warnings.append(
                 RuntimeWarning(
                     code="SYSFS_IRQ_METADATA_READ_FAILED",
+                    source_path=runtime_path,
+                    message=(
+                        f"Unable to read {runtime_path}: "
+                        f"{_format_error(error)}"
+                    ),
+                )
+            )
+            return None
+
+        return value or None
+
+    def _read_proc_irq_metadata(
+        self,
+        irq: int,
+        field_name: str,
+        warnings: list[RuntimeWarning],
+    ) -> str | None:
+        relative_path = f"irq/{irq}/{field_name}"
+        runtime_path = self._proc_runtime_path(relative_path)
+
+        try:
+            value = self._transport.read_text(
+                self._proc_access_path(relative_path),
+                encoding="utf-8",
+            ).strip()
+        except (FileNotFoundError, NotADirectoryError):
+            return None
+        except (OSError, UnicodeError) as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="PROC_IRQ_METADATA_READ_FAILED",
                     source_path=runtime_path,
                     message=(
                         f"Unable to read {runtime_path}: "
@@ -652,3 +749,11 @@ def _is_not_symlink_error(error: OSError) -> bool:
         getattr(error, "errno", None) == errno.EINVAL
         or getattr(error, "winerror", None) == WINDOWS_NOT_A_REPARSE_POINT
     )
+
+
+def _upsert_metadata(
+    items: list[tuple[str, MetadataValue]],
+    key: str,
+    value: MetadataValue,
+) -> list[tuple[str, MetadataValue]]:
+    return [item for item in items if item[0] != key] + [(key, value)]

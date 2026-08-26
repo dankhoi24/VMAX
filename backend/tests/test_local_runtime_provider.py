@@ -937,8 +937,10 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             fixture_root = Path(root)
             proc_root = fixture_root / "proc"
             irq_root = fixture_root / "sys" / "kernel" / "irq" / "182"
+            proc_irq_root = fixture_root / "proc" / "irq" / "182"
             proc_root.mkdir(parents=True)
             irq_root.mkdir(parents=True)
+            proc_irq_root.mkdir(parents=True)
             (proc_root / "interrupts").write_text(
                 "182: 0 1 0 0 GICv3 150 Level imr\n",
                 encoding="utf-8",
@@ -947,8 +949,11 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             (irq_root / "chip_name").write_text("GICv3-ITS\n", encoding="utf-8")
             (irq_root / "hwirq").write_text("151\n", encoding="utf-8")
             (irq_root / "type").write_text("Edge\n", encoding="utf-8")
-            (irq_root / "smp_affinity_list").write_text("0-3\n", encoding="utf-8")
-            (irq_root / "effective_affinity_list").write_text(
+            (proc_irq_root / "smp_affinity_list").write_text(
+                "0-3\n",
+                encoding="utf-8",
+            )
+            (proc_irq_root / "effective_affinity_list").write_text(
                 "1",
                 encoding="utf-8",
             )
@@ -965,12 +970,32 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
         self.assertEqual(interrupt.hardware_irq, 151)
         self.assertEqual(interrupt.trigger, "Edge")
         self.assertEqual(interrupt.actions, ("imr", "isp"))
-        self.assertEqual(
+        self.assertIn(("primary_source", "/proc/interrupts"), interrupt.metadata)
+        self.assertIn(
+            ("controller_source", "/sys/kernel/irq/182/chip_name"),
             interrupt.metadata,
+        )
+        self.assertIn(
+            ("hardware_irq_source", "/sys/kernel/irq/182/hwirq"),
+            interrupt.metadata,
+        )
+        self.assertIn(("trigger_source", "/sys/kernel/irq/182/type"), interrupt.metadata)
+        self.assertIn(
+            ("actions_source", "/sys/kernel/irq/182/actions"),
+            interrupt.metadata,
+        )
+        self.assertIn(("smp_affinity_list", "0-3"), interrupt.metadata)
+        self.assertIn(
+            ("smp_affinity_list_source", "/proc/irq/182/smp_affinity_list"),
+            interrupt.metadata,
+        )
+        self.assertIn(("effective_affinity_list", "1"), interrupt.metadata)
+        self.assertIn(
             (
-                ("smp_affinity_list", "0-3"),
-                ("effective_affinity_list", "1"),
+                "effective_affinity_list_source",
+                "/proc/irq/182/effective_affinity_list",
             ),
+            interrupt.metadata,
         )
 
     def test_collect_interrupts_reports_missing_proc_interrupts(self) -> None:
@@ -1017,6 +1042,36 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
         self.assertEqual(
             result.warnings[0].source_path,
             "/sys/kernel/irq/182/chip_name",
+        )
+
+    def test_collect_interrupts_reports_proc_irq_metadata_read_error(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            proc_root = fixture_root / "proc"
+            sysfs_root = fixture_root / "sys"
+            proc_root.mkdir()
+            (proc_root / "irq").mkdir()
+            provider = LocalLinuxRuntimeProvider(
+                sysfs_root=sysfs_root,
+                proc_root=proc_root,
+            )
+
+            def read_text(path: Path, *args: object, **kwargs: object) -> str:
+                if path == proc_root / "interrupts":
+                    return "182: 0 1 GICv3 150 Level imr\n"
+                if path == proc_root / "irq" / "182" / "smp_affinity_list":
+                    raise PermissionError("denied")
+                raise FileNotFoundError(path)
+
+            with patch.object(Path, "read_text", autospec=True, side_effect=read_text):
+                result = provider.collect_interrupts()
+
+        self.assertEqual(len(result.data), 1)
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(result.warnings[0].code, "PROC_IRQ_METADATA_READ_FAILED")
+        self.assertEqual(
+            result.warnings[0].source_path,
+            "/proc/irq/182/smp_affinity_list",
         )
 
     def test_fixture_roots_change_access_paths_not_runtime_paths(self) -> None:

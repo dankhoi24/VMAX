@@ -14,6 +14,14 @@ from .devicetree import (
     MetadataResponse,
     ParseErrorDetail,
 )
+from .dependency import (
+    DependencyDeviceCollectionResponse,
+    DependencyEvidenceResponse,
+    DependencyRuntimeInterruptResponse,
+    DependencyWarningResponse,
+    DeviceDependencyResponse,
+    DeviceDependencyViewResponse,
+)
 from .runtime import (
     IomemRegionResponse,
     RuntimeDeviceCollectionResponse,
@@ -33,6 +41,12 @@ __all__ = [
     "DeviceTreeNodeResponse",
     "DeviceTreePropertyResponse",
     "DeviceTreeResponse",
+    "DependencyDeviceCollectionResponse",
+    "DependencyEvidenceResponse",
+    "DependencyRuntimeInterruptResponse",
+    "DependencyWarningResponse",
+    "DeviceDependencyResponse",
+    "DeviceDependencyViewResponse",
     "ErrorResponse",
     "IomemRegionResponse",
     "MemoryRegionResponse",

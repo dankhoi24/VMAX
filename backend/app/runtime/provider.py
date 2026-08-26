@@ -7,6 +7,7 @@ from app.runtime.model import (
     RuntimeCollection,
     RuntimeDevice,
     RuntimeDriver,
+    RuntimeInterrupt,
     RuntimeSystemInfo,
 )
 
@@ -26,4 +27,8 @@ class RuntimeProvider(Protocol):
 
     def collect_iomem(self) -> RuntimeCollection[tuple[IomemRegion, ...]]:
         """Collect the runtime /proc/iomem hierarchy."""
+        ...
+
+    def collect_interrupts(self) -> RuntimeCollection[tuple[RuntimeInterrupt, ...]]:
+        """Collect the runtime Linux interrupt inventory."""
         ...

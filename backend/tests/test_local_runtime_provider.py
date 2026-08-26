@@ -13,6 +13,7 @@ from app.runtime import (
     RuntimeCollection,
     RuntimeDevice,
     RuntimeDriver,
+    RuntimeInterrupt,
     RuntimeProvider,
     RuntimeSystemInfo,
 )
@@ -899,6 +900,125 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
         self.assertEqual(result.warnings[0].source_path, "/proc/iomem")
         self.assertNotIn(str(fixture_root), result.warnings[0].message)
 
+    def test_collect_interrupts_reads_proc_interrupts(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            proc_root = fixture_root / "proc"
+            proc_root.mkdir()
+            (proc_root / "interrupts").write_text(
+                "\n".join(
+                    (
+                        "           CPU0       CPU1       CPU2       CPU3",
+                        "182:          0       4291          0          0  GICv3  150 Level imr",
+                    )
+                ),
+                encoding="utf-8",
+            )
+
+            provider = LocalLinuxRuntimeProvider(
+                sysfs_root=fixture_root / "sys",
+                proc_root=proc_root,
+            )
+            result = provider.collect_interrupts()
+
+        self.assertEqual(result.warnings, ())
+        self.assertEqual(len(result.data), 1)
+        self.assertIsInstance(result.data[0], RuntimeInterrupt)
+        self.assertEqual(result.data[0].irq, 182)
+        self.assertEqual(result.data[0].counts, (0, 4291, 0, 0))
+        self.assertEqual(result.data[0].controller, "GICv3")
+        self.assertEqual(result.data[0].hardware_irq, 150)
+        self.assertEqual(result.data[0].trigger, "Level")
+        self.assertEqual(result.data[0].actions, ("imr",))
+        self.assertEqual(result.data[0].source_path, "/proc/interrupts")
+
+    def test_collect_interrupts_enriches_optional_sysfs_irq_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            proc_root = fixture_root / "proc"
+            irq_root = fixture_root / "sys" / "kernel" / "irq" / "182"
+            proc_root.mkdir(parents=True)
+            irq_root.mkdir(parents=True)
+            (proc_root / "interrupts").write_text(
+                "182: 0 1 0 0 GICv3 150 Level imr\n",
+                encoding="utf-8",
+            )
+            (irq_root / "actions").write_text("imr, isp\n", encoding="utf-8")
+            (irq_root / "chip_name").write_text("GICv3-ITS\n", encoding="utf-8")
+            (irq_root / "hwirq").write_text("151\n", encoding="utf-8")
+            (irq_root / "type").write_text("Edge\n", encoding="utf-8")
+            (irq_root / "smp_affinity_list").write_text("0-3\n", encoding="utf-8")
+            (irq_root / "effective_affinity_list").write_text(
+                "1",
+                encoding="utf-8",
+            )
+
+            provider = LocalLinuxRuntimeProvider(
+                sysfs_root=fixture_root / "sys",
+                proc_root=proc_root,
+            )
+            result = provider.collect_interrupts()
+
+        self.assertEqual(result.warnings, ())
+        interrupt = result.data[0]
+        self.assertEqual(interrupt.controller, "GICv3-ITS")
+        self.assertEqual(interrupt.hardware_irq, 151)
+        self.assertEqual(interrupt.trigger, "Edge")
+        self.assertEqual(interrupt.actions, ("imr", "isp"))
+        self.assertEqual(
+            interrupt.metadata,
+            (
+                ("smp_affinity_list", "0-3"),
+                ("effective_affinity_list", "1"),
+            ),
+        )
+
+    def test_collect_interrupts_reports_missing_proc_interrupts(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            provider = LocalLinuxRuntimeProvider(
+                sysfs_root=fixture_root / "sys",
+                proc_root=fixture_root / "proc",
+            )
+            result = provider.collect_interrupts()
+
+        self.assertEqual(result.data, ())
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(result.warnings[0].code, "PROC_INTERRUPTS_READ_FAILED")
+        self.assertEqual(result.warnings[0].source_path, "/proc/interrupts")
+        self.assertNotIn(str(fixture_root), result.warnings[0].message)
+
+    def test_collect_interrupts_reports_sysfs_irq_metadata_read_error(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            fixture_root = Path(root)
+            proc_root = fixture_root / "proc"
+            sysfs_root = fixture_root / "sys"
+            proc_root.mkdir()
+            (sysfs_root / "kernel" / "irq").mkdir(parents=True)
+            provider = LocalLinuxRuntimeProvider(
+                sysfs_root=sysfs_root,
+                proc_root=proc_root,
+            )
+
+            def read_text(path: Path, *args: object, **kwargs: object) -> str:
+                if path == proc_root / "interrupts":
+                    return "182: 0 1 GICv3 150 Level imr\n"
+                if path == sysfs_root / "kernel" / "irq" / "182" / "chip_name":
+                    raise PermissionError("denied")
+                raise FileNotFoundError(path)
+
+            with patch.object(Path, "read_text", autospec=True, side_effect=read_text):
+                result = provider.collect_interrupts()
+
+        self.assertEqual(len(result.data), 1)
+        self.assertEqual(result.data[0].controller, "GICv3")
+        self.assertEqual(len(result.warnings), 1)
+        self.assertEqual(result.warnings[0].code, "SYSFS_IRQ_METADATA_READ_FAILED")
+        self.assertEqual(
+            result.warnings[0].source_path,
+            "/sys/kernel/irq/182/chip_name",
+        )
+
     def test_fixture_roots_change_access_paths_not_runtime_paths(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             fixture_root = Path(root)
@@ -948,6 +1068,7 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             proc_root = fixture_root / "proc"
             proc_root.mkdir()
             (proc_root / "iomem").write_text("", encoding="utf-8")
+            (proc_root / "interrupts").write_text("", encoding="utf-8")
             provider: RuntimeProvider = LocalLinuxRuntimeProvider(
                 sysfs_root=fixture_root / "sys",
                 proc_root=proc_root,
@@ -957,6 +1078,7 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
             devices = provider.collect_devices()
             drivers = provider.collect_drivers()
             iomem = provider.collect_iomem()
+            interrupts = provider.collect_interrupts()
 
         self.assertIsInstance(system_info, RuntimeCollection)
         self.assertIsInstance(system_info.data, RuntimeSystemInfo)
@@ -975,6 +1097,8 @@ class LocalLinuxRuntimeProviderTest(unittest.TestCase):
         self.assertEqual(drivers.warnings, ())
         self.assertEqual(iomem.data, ())
         self.assertEqual(iomem.warnings, ())
+        self.assertEqual(interrupts.data, ())
+        self.assertEqual(interrupts.warnings, ())
 
 
 def _patched_runtime(machine: str):

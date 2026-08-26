@@ -8,6 +8,7 @@ from app.runtime import (
     RuntimeCollection,
     RuntimeDevice,
     RuntimeDriver,
+    RuntimeInterrupt,
     RuntimeResource,
     RuntimeSystemInfo,
     RuntimeWarning,
@@ -22,16 +23,19 @@ class FakeRuntimeProvider:
         devices: RuntimeCollection[tuple[RuntimeDevice, ...]] | None = None,
         drivers: RuntimeCollection[tuple[RuntimeDriver, ...]] | None = None,
         iomem: RuntimeCollection[tuple[IomemRegion, ...]] | None = None,
+        interrupts: RuntimeCollection[tuple[RuntimeInterrupt, ...]] | None = None,
     ) -> None:
         self.system = system or RuntimeCollection(data=RuntimeSystemInfo())
         self.devices = devices or RuntimeCollection(data=())
         self.drivers = drivers or RuntimeCollection(data=())
         self.iomem = iomem or RuntimeCollection(data=())
+        self.interrupts = interrupts or RuntimeCollection(data=())
         self.calls = {
             "system": 0,
             "devices": 0,
             "drivers": 0,
             "iomem": 0,
+            "interrupts": 0,
         }
 
     def collect_system_info(self) -> RuntimeCollection[RuntimeSystemInfo]:
@@ -49,6 +53,10 @@ class FakeRuntimeProvider:
     def collect_iomem(self) -> RuntimeCollection[tuple[IomemRegion, ...]]:
         self.calls["iomem"] += 1
         return self.iomem
+
+    def collect_interrupts(self) -> RuntimeCollection[tuple[RuntimeInterrupt, ...]]:
+        self.calls["interrupts"] += 1
+        return self.interrupts
 
 
 class FastApiRuntimeTest(unittest.TestCase):

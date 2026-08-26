@@ -4,6 +4,7 @@ from app.runtime.model import (
     RuntimeCollection,
     RuntimeDevice,
     RuntimeDriver,
+    RuntimeInterrupt,
     RuntimeResource,
     RuntimeSystemInfo,
     RuntimeWarning,
@@ -18,6 +19,7 @@ from app.runtime.transport import (
     RuntimeTransportUnavailable,
 )
 from app.runtime.iomem import parse_proc_iomem_file
+from app.runtime.interrupts import parse_proc_interrupts_file
 from app.runtime.resources import decode_resource_flag_names, parse_linux_resource_file
 
 __all__ = [
@@ -29,6 +31,7 @@ __all__ = [
     "RuntimeCollection",
     "RuntimeDevice",
     "RuntimeDriver",
+    "RuntimeInterrupt",
     "RuntimeProvider",
     "RuntimeResource",
     "RuntimeSystemInfo",
@@ -40,4 +43,5 @@ __all__ = [
     "decode_resource_flag_names",
     "parse_linux_resource_file",
     "parse_proc_iomem_file",
+    "parse_proc_interrupts_file",
 ]

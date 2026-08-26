@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import errno
+from dataclasses import replace
 from pathlib import Path
 
 from app.runtime.model import (
@@ -8,10 +9,15 @@ from app.runtime.model import (
     RuntimeCollection,
     RuntimeDevice,
     RuntimeDriver,
+    RuntimeInterrupt,
     RuntimeSystemInfo,
     RuntimeWarning,
 )
 from app.runtime.iomem import parse_proc_iomem_file
+from app.runtime.interrupts import (
+    parse_interrupt_actions,
+    parse_proc_interrupts_file,
+)
 from app.runtime.provider import RuntimeProvider
 from app.runtime.transport import (
     LocalRuntimeTransport,
@@ -214,6 +220,40 @@ class LinuxRuntimeProvider(RuntimeProvider):
 
         return parse_proc_iomem_file(text, runtime_path)
 
+    def collect_interrupts(self) -> RuntimeCollection[tuple[RuntimeInterrupt, ...]]:
+        runtime_path = self._proc_runtime_path("interrupts")
+        try:
+            text = self._transport.read_text(
+                self._proc_access_path("interrupts"),
+                encoding="utf-8",
+            )
+        except (OSError, UnicodeError) as error:
+            return RuntimeCollection(
+                data=(),
+                warnings=(
+                    RuntimeWarning(
+                        code="PROC_INTERRUPTS_READ_FAILED",
+                        source_path=runtime_path,
+                        message=(
+                            f"Unable to read {runtime_path}: "
+                            f"{_format_error(error)}"
+                        ),
+                    ),
+                ),
+            )
+
+        parsed = parse_proc_interrupts_file(text, runtime_path)
+        warnings = list(parsed.warnings)
+        if self._sysfs_irq_root_available(warnings):
+            interrupts = tuple(
+                self._enrich_interrupt_from_sysfs(interrupt, warnings)
+                for interrupt in parsed.data
+            )
+        else:
+            interrupts = parsed.data
+
+        return RuntimeCollection(data=interrupts, warnings=tuple(warnings))
+
     def _sysfs_access_path(self, relative_path: PathInput) -> Path:
         return self._transport.sysfs_path(relative_path)
 
@@ -385,6 +425,124 @@ class LinuxRuntimeProvider(RuntimeProvider):
             )
 
         return tuple(bound_device_paths)
+
+    def _sysfs_irq_root_available(self, warnings: list[RuntimeWarning]) -> bool:
+        runtime_path = self._sysfs_runtime_path("kernel/irq")
+        try:
+            return self._transport.is_dir(self._sysfs_access_path("kernel/irq"))
+        except (FileNotFoundError, NotADirectoryError):
+            return False
+        except OSError as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="SYSFS_IRQ_METADATA_READ_FAILED",
+                    source_path=runtime_path,
+                    message=(
+                        f"Unable to inspect {runtime_path}: "
+                        f"{_format_error(error)}"
+                    ),
+                )
+            )
+            return False
+
+    def _enrich_interrupt_from_sysfs(
+        self,
+        interrupt: RuntimeInterrupt,
+        warnings: list[RuntimeWarning],
+    ) -> RuntimeInterrupt:
+        actions_text = self._read_sysfs_irq_metadata(
+            interrupt.irq,
+            "actions",
+            warnings,
+        )
+        chip_name = self._read_sysfs_irq_metadata(
+            interrupt.irq,
+            "chip_name",
+            warnings,
+        )
+        hwirq_text = self._read_sysfs_irq_metadata(
+            interrupt.irq,
+            "hwirq",
+            warnings,
+        )
+        trigger = self._read_sysfs_irq_metadata(
+            interrupt.irq,
+            "type",
+            warnings,
+        )
+        metadata = list(interrupt.metadata)
+
+        for field_name in ("smp_affinity_list", "effective_affinity_list"):
+            value = self._read_sysfs_irq_metadata(
+                interrupt.irq,
+                field_name,
+                warnings,
+            )
+            if value is not None:
+                metadata.append((field_name, value))
+
+        hardware_irq = interrupt.hardware_irq
+        if hwirq_text is not None:
+            try:
+                hardware_irq = int(hwirq_text, 0)
+            except ValueError as error:
+                runtime_path = self._sysfs_runtime_path(
+                    f"kernel/irq/{interrupt.irq}/hwirq"
+                )
+                warnings.append(
+                    RuntimeWarning(
+                        code="SYSFS_IRQ_METADATA_PARSE_FAILED",
+                        source_path=runtime_path,
+                        message=(
+                            f"Unable to parse {runtime_path}: "
+                            f"{_format_error(error)}"
+                        ),
+                    )
+                )
+
+        actions = interrupt.actions
+        if actions_text is not None:
+            actions = parse_interrupt_actions(actions_text)
+
+        return replace(
+            interrupt,
+            controller=chip_name or interrupt.controller,
+            hardware_irq=hardware_irq,
+            trigger=trigger or interrupt.trigger,
+            actions=actions,
+            metadata=tuple(metadata),
+        )
+
+    def _read_sysfs_irq_metadata(
+        self,
+        irq: int,
+        field_name: str,
+        warnings: list[RuntimeWarning],
+    ) -> str | None:
+        relative_path = f"kernel/irq/{irq}/{field_name}"
+        runtime_path = self._sysfs_runtime_path(relative_path)
+
+        try:
+            value = self._transport.read_text(
+                self._sysfs_access_path(relative_path),
+                encoding="utf-8",
+            ).strip()
+        except (FileNotFoundError, NotADirectoryError):
+            return None
+        except (OSError, UnicodeError) as error:
+            warnings.append(
+                RuntimeWarning(
+                    code="SYSFS_IRQ_METADATA_READ_FAILED",
+                    source_path=runtime_path,
+                    message=(
+                        f"Unable to read {runtime_path}: "
+                        f"{_format_error(error)}"
+                    ),
+                )
+            )
+            return None
+
+        return value or None
 
     def _sysfs_runtime_path_from_access_path(self, access_path: Path) -> str:
         try:

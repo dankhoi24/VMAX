@@ -113,6 +113,7 @@ class LocalRuntimeTransportTest(unittest.TestCase):
         devices = provider.collect_devices()
         drivers = provider.collect_drivers()
         iomem = provider.collect_iomem()
+        interrupts = provider.collect_interrupts()
 
         self.assertEqual(system_info.data.hostname, "pi5")
         self.assertEqual(system_info.data.architecture, "arm64")
@@ -126,9 +127,13 @@ class LocalRuntimeTransportTest(unittest.TestCase):
         self.assertEqual(iomem.warnings, ())
         self.assertEqual(len(iomem.data), 1)
         self.assertEqual(iomem.data[0].name, "System RAM")
+        self.assertEqual(interrupts.warnings, ())
+        self.assertEqual(len(interrupts.data), 1)
+        self.assertEqual(interrupts.data[0].irq, 182)
         self.assertIn(("iterdir", "/fixture/sys/bus/platform/devices"), transport.calls)
         self.assertIn(("iterdir", "/fixture/sys/bus/platform/drivers"), transport.calls)
         self.assertIn(("read_text", "/fixture/proc/iomem"), transport.calls)
+        self.assertIn(("read_text", "/fixture/proc/interrupts"), transport.calls)
 
 
 class _FakeRuntimeTransport:
@@ -171,6 +176,8 @@ class _FakeRuntimeTransport:
             return "quiet\n"
         if path == self.proc_root / "iomem":
             return "00000000-3fffffff : System RAM\n"
+        if path == self.proc_root / "interrupts":
+            return "182: 0 4291 0 0 GICv3 150 Level imr\n"
         raise FileNotFoundError(path)
 
     def uname(self) -> object:

@@ -175,6 +175,7 @@ class SshRuntimeTransportTest(unittest.TestCase):
         devices = provider.collect_devices()
         drivers = provider.collect_drivers()
         iomem = provider.collect_iomem()
+        interrupts = provider.collect_interrupts()
 
         self.assertEqual(metadata.warnings, ())
         self.assertEqual(metadata.data.hostname, "x5h")
@@ -194,6 +195,9 @@ class SshRuntimeTransportTest(unittest.TestCase):
         self.assertEqual(iomem.warnings, ())
         self.assertEqual(len(iomem.data), 1)
         self.assertEqual(iomem.data[0].name, "18800000.mfis")
+        self.assertEqual(interrupts.warnings, ())
+        self.assertEqual(len(interrupts.data), 1)
+        self.assertEqual(interrupts.data[0].irq, 182)
 
     def test_environment_factory_selects_ssh_provider(self) -> None:
         provider = runtime_provider_from_environment(
@@ -365,6 +369,13 @@ class _RuntimeFixtureSession:
                 returncode=0,
                 stdout="18800000-18800fff : 18800000.mfis\n",
             )
+        if "vmax:ssh-runtime:read_text" in script and "/proc/interrupts" in script:
+            return SshCommandResult(
+                returncode=0,
+                stdout="182: 0 4291 0 0 GICv3 150 Level imr\n",
+            )
+        if "vmax:ssh-runtime:read_text" in script and "/sys/kernel/irq/" in script:
+            return SshCommandResult(returncode=42)
         if "vmax:ssh-runtime:iterdir" in script and (
             "/sys/bus/platform/devices" in script
         ):
@@ -381,6 +392,8 @@ class _RuntimeFixtureSession:
         ):
             return SshCommandResult(returncode=0, stdout="arm-smmu-v3\n")
         if "vmax:ssh-runtime:is_dir" in script and "not-a-device" in script:
+            return SshCommandResult(returncode=1)
+        if "vmax:ssh-runtime:is_dir" in script and "/sys/kernel/irq" in script:
             return SshCommandResult(returncode=1)
         if "vmax:ssh-runtime:is_dir" in script:
             return SshCommandResult(returncode=0)

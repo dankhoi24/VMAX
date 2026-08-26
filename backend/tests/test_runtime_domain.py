@@ -9,6 +9,7 @@ from app.runtime import (
     RuntimeCollection,
     RuntimeDevice,
     RuntimeDriver,
+    RuntimeInterrupt,
     RuntimeProvider,
     RuntimeResource,
     RuntimeSystemInfo,
@@ -32,6 +33,40 @@ class RuntimeDomainTest(unittest.TestCase):
     def test_runtime_resource_rejects_invalid_range(self) -> None:
         with self.assertRaisesRegex(ValueError, "end must be >= start"):
             RuntimeResource(index=0, start=0x2000, end=0x1000, flags=0)
+
+    def test_runtime_interrupt_preserves_counts_and_optional_metadata(self) -> None:
+        interrupt = RuntimeInterrupt(
+            irq=182,
+            counts=[0, 4291, 0, 0],
+            controller="GICv3",
+            hardware_irq=150,
+            trigger="Level",
+            actions=["imr"],
+            raw_line="182: 0 4291 0 0 GICv3 150 Level imr",
+            source_path="/proc/interrupts",
+            metadata=(("smp_affinity_list", "0-3"),),
+        )
+
+        self.assertEqual(interrupt.counts, (0, 4291, 0, 0))
+        self.assertEqual(interrupt.total_count, 4291)
+        self.assertEqual(interrupt.actions, ("imr",))
+        self.assertEqual(interrupt.metadata, (("smp_affinity_list", "0-3"),))
+
+        with self.assertRaises(FrozenInstanceError):
+            interrupt.irq = 183
+
+    def test_runtime_interrupt_rejects_invalid_values(self) -> None:
+        with self.assertRaisesRegex(ValueError, "counts must not be empty"):
+            RuntimeInterrupt(irq=1, counts=())
+
+        with self.assertRaisesRegex(ValueError, "irq must be >= 0"):
+            RuntimeInterrupt(irq=-1, counts=(0,))
+
+        with self.assertRaisesRegex(ValueError, "counts must be >= 0"):
+            RuntimeInterrupt(irq=1, counts=(-1,))
+
+        with self.assertRaisesRegex(ValueError, "source_path must be absolute"):
+            RuntimeInterrupt(irq=1, counts=(0,), source_path="proc/interrupts")
 
     def test_runtime_device_supports_unbound_device_and_resources(self) -> None:
         resource = RuntimeResource(index=1, start=0x1000, end=0x10FF, flags=0x200)
@@ -139,11 +174,13 @@ class RuntimeDomainTest(unittest.TestCase):
         snapshot = LinuxRuntimeSnapshot(
             system=RuntimeSystemInfo(hostname="pi5", architecture="aarch64"),
             devices=[device],
+            interrupts=[RuntimeInterrupt(irq=182, counts=(0, 1, 0, 0))],
             warnings=[warning],
         )
 
         self.assertEqual(snapshot.system.hostname, "pi5")
         self.assertEqual(snapshot.devices, (device,))
+        self.assertEqual(snapshot.interrupts[0].irq, 182)
         self.assertEqual(snapshot.warnings, (warning,))
 
         with self.assertRaises(FrozenInstanceError):
@@ -222,6 +259,19 @@ class RuntimeDomainTest(unittest.TestCase):
                     ),
                 )
 
+            def collect_interrupts(
+                self,
+            ) -> RuntimeCollection[tuple[RuntimeInterrupt, ...]]:
+                return RuntimeCollection(
+                    data=(
+                        RuntimeInterrupt(
+                            irq=182,
+                            counts=(0, 4291, 0, 0),
+                            controller="GICv3",
+                        ),
+                    ),
+                )
+
         provider: RuntimeProvider = FakeRuntimeProvider()
 
         self.assertEqual(provider.collect_system_info().data.hostname, "test-target")
@@ -232,3 +282,4 @@ class RuntimeDomainTest(unittest.TestCase):
         )
         self.assertEqual(provider.collect_drivers().data[0].name, "serial8250")
         self.assertEqual(provider.collect_iomem().data[0].name, "System RAM")
+        self.assertEqual(provider.collect_interrupts().data[0].irq, 182)

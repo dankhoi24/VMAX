@@ -75,6 +75,46 @@ class RuntimeResource:
 
 
 @dataclass(frozen=True)
+class RuntimeInterrupt:
+    irq: int
+    counts: tuple[int, ...]
+    controller: str | None = None
+    hardware_irq: int | None = None
+    trigger: str | None = None
+    actions: tuple[str, ...] = field(default_factory=tuple)
+    raw_line: str | None = None
+    source_path: str = "/proc/interrupts"
+    metadata: MetadataItems = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        _validate_non_negative_int(self.irq, "RuntimeInterrupt.irq")
+
+        counts = tuple(self.counts)
+        if not counts:
+            raise ValueError("RuntimeInterrupt.counts must not be empty")
+        for count in counts:
+            _validate_non_negative_int(count, "RuntimeInterrupt.counts")
+
+        _validate_optional_non_empty(self.controller, "RuntimeInterrupt.controller")
+        if self.hardware_irq is not None:
+            _validate_non_negative_int(
+                self.hardware_irq,
+                "RuntimeInterrupt.hardware_irq",
+            )
+        _validate_optional_non_empty(self.trigger, "RuntimeInterrupt.trigger")
+        _validate_optional_non_empty(self.raw_line, "RuntimeInterrupt.raw_line")
+        _validate_absolute_path(self.source_path, "RuntimeInterrupt.source_path")
+
+        object.__setattr__(self, "counts", counts)
+        object.__setattr__(self, "actions", _normalize_str_tuple(self.actions))
+        object.__setattr__(self, "metadata", _normalize_metadata(self.metadata))
+
+    @property
+    def total_count(self) -> int:
+        return sum(self.counts)
+
+
+@dataclass(frozen=True)
 class RuntimeDevice:
     name: str
     sysfs_path: str
@@ -157,12 +197,14 @@ class LinuxRuntimeSnapshot:
     devices: tuple[RuntimeDevice, ...] = field(default_factory=tuple)
     drivers: tuple[RuntimeDriver, ...] = field(default_factory=tuple)
     iomem: tuple[IomemRegion, ...] = field(default_factory=tuple)
+    interrupts: tuple[RuntimeInterrupt, ...] = field(default_factory=tuple)
     warnings: tuple[RuntimeWarning, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "devices", tuple(self.devices))
         object.__setattr__(self, "drivers", tuple(self.drivers))
         object.__setattr__(self, "iomem", tuple(self.iomem))
+        object.__setattr__(self, "interrupts", tuple(self.interrupts))
         object.__setattr__(self, "warnings", tuple(self.warnings))
 
 
